@@ -1,8 +1,10 @@
 CXX = mpic++
 CXXFLAGS = -Wall -Wextra -pedantic -std=c++20
+CPPFLAGS = -Isrc
 
 SRC = src/main.cc \
-			src/clocks.cc
+      src/client.cc \
+      src/server.cc
 
 OBJ = $(SRC:.cc=.o)
 
