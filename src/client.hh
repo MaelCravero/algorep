@@ -14,4 +14,4 @@ private:
     int size_;
 };
 
-void client(Client client);
+void client(int rank, int size);

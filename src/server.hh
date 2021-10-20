@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <mpi.h>
+#include <string>
 #include <vector>
 
 enum class Status
