@@ -2,16 +2,16 @@
 
 #include <mpi.h>
 
+#include "common.hh"
+
 class Client
 {
 public:
-    Client(int rank, int size);
+    Client(rank rank, int size);
 
     void send_request();
 
 private:
-    int rank_;
+    rank rank_;
     int size_;
 };
-
-void client(int rank, int size);

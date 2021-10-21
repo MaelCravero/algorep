@@ -5,50 +5,68 @@
 #include <string>
 #include <vector>
 
-enum class Status
-{
-    FOLLOWER,
-    CANDIDATE,
-    LEADER,
-};
-
-enum class AppendEntriesStatus
-{
-    SUCCESS,
-    FAILURE,
-};
+#include "common.hh"
 
 class Server
 {
 public:
-    Server(int rank, int size);
+    enum class Status
+    {
+        FOLLOWER,
+        CANDIDATE,
+        LEADER,
+    };
+
+    enum class AppendEntriesStatus
+    {
+        SUCCESS,
+        FAILURE,
+    };
+
+    using timestamp = std::chrono::duration<double>;
+
+    Server(rank rank, int size);
+
+    /// Update server, if timeout is reached then start an election
+    void update();
+
     void start_election();
+    void request_vote();
 
     void heartbeat();
+    void reset_timeout();
 
     AppendEntriesStatus append_entries(std::string log);
 
-    void request_vote();
+    /// Accessors
+    /// \{
+    rank leader_get() const
+    {
+        return leader_;
+    }
+    /// \}
 
-    // Update server, if timeout is reached then start an election
-    void update();
-
-    int get_leader_rank();
+protected:
+    /// Process round depending on status
+    /// \{
+    void leader();
+    void candidate();
+    void follower();
+    /// \}
 
 private:
+    /// Status of the server
     Status status_;
-    int rank_;
+    /// Rank of the server
+    rank rank_;
+    /// Size of the network
     int size_;
-
-    int leader_rank_;
-
-    std::vector<size_t> next_index_;
-
-    double election_timeout_;
-    double election_time_remaining_;
-
-    std::chrono::duration<double> previous_time_;
+    /// Rank of the leader
+    rank leader_;
+    /// Timestamp of the timeout
+    timestamp timeout_;
+    /// Current term
     size_t term_;
+    /// ? FIXME
+    std::vector<size_t> next_index_;
 };
-
-void server(int rank, int size);

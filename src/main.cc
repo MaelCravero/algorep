@@ -4,6 +4,22 @@
 #include "client.hh"
 #include "server.hh"
 
+void server(rank rank, int size)
+{
+    Server server(rank, size);
+
+    while (true)
+    {
+        server.update();
+    }
+}
+
+void client(rank rank, int size)
+{
+    Client client(rank, size);
+    client.send_request();
+}
+
 bool is_client(int rank)
 {
     return rank % 2;
