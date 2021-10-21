@@ -23,6 +23,14 @@ public:
         FAILURE,
     };
 
+    enum MessageTag
+    {
+        APPEND_ENTRIES = 0,
+        HEARTBEAT,
+        REQUEST_VOTE,
+        VOTE,
+    };
+
     using timestamp = std::chrono::duration<double>;
 
     Server(rank rank, int size);
@@ -35,6 +43,7 @@ public:
 
     void heartbeat();
     void reset_timeout();
+    void reset_leader_timeout();
 
     AppendEntriesStatus append_entries(std::string log);
 
@@ -47,6 +56,8 @@ public:
     /// \}
 
 protected:
+    void become_leader();
+
     /// Process round depending on status
     /// \{
     void leader();
@@ -57,16 +68,28 @@ protected:
 private:
     /// Status of the server
     Status status_;
+
     /// Rank of the server
     rank rank_;
+
     /// Size of the network
     int size_;
+
     /// Rank of the leader
     rank leader_;
+
     /// Timestamp of the timeout
     timestamp timeout_;
+
+    /// Timestamp of the timeout
+    timestamp heartbeat_timeout_;
+
     /// Current term
-    size_t term_;
-    /// ? FIXME
-    std::vector<size_t> next_index_;
+    int term_;
+
+    /// Last voted term
+    int last_voted_term_;
+
+    /// Next term of each node in the network
+    std::vector<int> next_index_;
 };
