@@ -3,33 +3,33 @@
 #include <chrono>
 #include <random>
 
-void server(int rank, int size)
+namespace
 {
-    Server server(rank, size);
-
-    while (true)
+    Server::timestamp now()
     {
-        server.update();
+        return std::chrono::system_clock::now().time_since_epoch();
     }
-}
 
-Server::Server(int rank, int size)
+} // namespace
+
+Server::Server(rank rank, int size)
     : status_(Status::FOLLOWER)
     , rank_(rank)
     , size_(size)
-    , leader_rank_(-1)
+    , leader_(-1)
+    , timeout_()
+    , term_(0)
     , next_index_(0)
+{}
+
+void Server::reset_timeout()
 {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<double> dis(0.1, 0.5);
 
-    election_timeout_ = dis(gen);
-    election_time_remaining_ = election_timeout_;
-
-    previous_time_ = std::chrono::system_clock::now().time_since_epoch();
-
-    term_ = 0;
+    int delay = dis(gen) * 1000;
+    timeout_ = now() + std::chrono::milliseconds(delay);
 }
 
 void Server::update()
@@ -43,4 +43,26 @@ void Server::update()
 
         // TODO: election ?
     }
+}
+
+void Server::leader()
+{
+    // heartbeat back/forth
+    // if msg: ask confirmation
+}
+
+void Server::candidate()
+{
+    // ask votes
+    // if majority declare leader
+}
+
+void Server::follower()
+{
+    // vote
+    // ack msg
+    // if heartbeat, reset timeout
+
+    // We will most likely only be sending ids, we can use the tag field of send
+    // for determining the type of the message
 }

@@ -1,11 +1,5 @@
 #include "client.hh"
 
-void client(int rank, int size)
-{
-    Client client(rank, size);
-    client.send_request();
-}
-
 Client::Client(int rank, int size)
     : rank_(rank)
     , size_(size)
