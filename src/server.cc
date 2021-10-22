@@ -21,6 +21,7 @@ Server::Server(rank rank, int size)
     , term_(0)
     , last_voted_term_(0)
     , next_index_(0)
+    , logger_("logs" + std::to_string(rank))
 {
     reset_timeout();
 }
@@ -98,7 +99,7 @@ void Server::heartbeat()
 {
     reset_leader_timeout();
     send(0, MessageTag::HEARTBEAT);
-    std::cout << "Sending heatbeat\n";
+    logger_.log(Logger::LogType::INFO, "Sending heatbeat");
 }
 
 void Server::update()
@@ -119,7 +120,7 @@ void Server::become_leader()
 {
     status_ = Status::LEADER;
     reset_leader_timeout();
-    std::cout << rank_ << " IS THE LEADER!!!!\n";
+    logger_.log(Logger::LogType::DEBUG, "became the leader");
 }
 
 void Server::leader()
@@ -137,7 +138,7 @@ void Server::candidate()
     term_++;
     reset_timeout();
 
-    std::cout << "candidate :" << rank_ << "\n";
+    logger_.log(Logger::LogType::INFO, "candidate");
 
     // Ask for votes for self
     status_ = Status::CANDIDATE;
@@ -166,22 +167,16 @@ void Server::candidate()
 
         if (mpi_status.MPI_TAG == MessageTag::VOTE /* && message == rank_*/)
         {
-            std::cout << rank_ << " got a vote from " << mpi_status.MPI_SOURCE
-                      << "\n";
+            logger_.log(Logger::LogType::INFO,
+                        "got a vote from"
+                            + std::to_string(mpi_status.MPI_SOURCE));
             nb_votes++;
         }
 
-        // New vote requested
-        else if (mpi_status.MPI_TAG == MessageTag::REQUEST_VOTE)
+        if (mpi_status.MPI_TAG == MessageTag::HEARTBEAT)
         {
-            std::cout << rank_ << " got a vote request from "
-                      << mpi_status.MPI_SOURCE << "\n";
-            term_++;
-
-            // Vote for requester and switch to follower
-            send(term_, mpi_status.MPI_SOURCE, MessageTag::VOTE);
-
-            return follower();
+            reset_timeout();
+            return;
         }
     }
 
@@ -206,14 +201,12 @@ void Server::follower()
 
     message = recv();
 
-    std::cout << "received message : " << rank_
-              << " source: " << mpi_status.MPI_SOURCE << "\n";
-
     if (mpi_status.MPI_TAG == MessageTag::REQUEST_VOTE
         /* && last_voted_term_ < message */)
     {
         // Vote
-        std::cout << rank_ << " voting for " << mpi_status.MPI_SOURCE << "\n";
+        logger_.log(Logger::LogType::INFO,
+                    "voting for " + std::to_string(mpi_status.MPI_SOURCE));
         reset_timeout();
         send(mpi_status.MPI_SOURCE, mpi_status.MPI_SOURCE, MessageTag::VOTE);
 
@@ -222,12 +215,18 @@ void Server::follower()
 
     else if (mpi_status.MPI_TAG == MessageTag::APPEND_ENTRIES)
     {
+        logger_.log(Logger::LogType::INFO, "AppendEntries");
+
         reset_timeout();
         // Append entry
     }
 
     else if (mpi_status.MPI_TAG == MessageTag::HEARTBEAT)
     {
+        logger_.log(Logger::LogType::INFO,
+                    "received heartbeat from "
+                        + std::to_string(mpi_status.MPI_SOURCE));
+
         reset_timeout();
     }
 }
