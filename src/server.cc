@@ -3,23 +3,6 @@
 #include <chrono>
 #include <random>
 
-#define SEND(rank, tag)                                                        \
-    MPI_Isend(&message, 1, MPI_INT, rank, tag, MPI_COMM_WORLD, &request);
-
-#define RECV(rank)                                                             \
-    MPI_Recv(&message, 1, MPI_INT, rank, MPI_ANY_TAG, MPI_COMM_WORLD,          \
-             MPI_STATUS_IGNORE);
-
-// FIXME: Bcast does not accept message tags, need to find a workaround
-#define SEND_ALL(rank, tag)                                                    \
-    for (auto i = 0; i < size_; i += 2)                                        \
-        if (i != rank)                                                         \
-            MPI_Isend(&message, 1, MPI_INT, i, tag, MPI_COMM_WORLD, &request);
-
-#define RECV_ALL()                                                             \
-    MPI_Irecv(&message, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG,               \
-              MPI_COMM_WORLD, &request);
-
 namespace
 {
     Server::timestamp now()
@@ -40,6 +23,55 @@ Server::Server(rank rank, int size)
     , next_index_(0)
 {
     reset_timeout();
+}
+
+void Server::send(int message, int rank, int tag)
+{
+    // FIXME: Should we do something with this request ?
+    MPI_Request request = MPI_REQUEST_NULL;
+
+    // Shouldn't message be available until it gets received ?
+    // I don't know why this works while message is on the stack and is
+    // dealocated right away
+    MPI_Isend(&message, 1, MPI_INT, rank, tag, MPI_COMM_WORLD, &request);
+}
+
+// Send to all other servers
+void Server::send(int message, int tag)
+{
+    MPI_Request request = MPI_REQUEST_NULL;
+
+    for (auto i = 0; i < size_; i += 2)
+        if (i != rank_)
+            MPI_Isend(&message, 1, MPI_INT, i, tag, MPI_COMM_WORLD, &request);
+}
+
+// receive from a server on a particular tag
+int Server::recv(int rank, int tag)
+{
+    int message;
+    MPI_Recv(&message, 1, MPI_INT, rank, tag, MPI_COMM_WORLD,
+             MPI_STATUS_IGNORE);
+
+    return message;
+}
+// receive from a server on any tag
+int Server::recv(int rank)
+{
+    int message;
+    MPI_Recv(&message, 1, MPI_INT, rank, MPI_ANY_TAG, MPI_COMM_WORLD,
+             MPI_STATUS_IGNORE);
+
+    return message;
+}
+// receive from any server on any tag
+int Server::recv()
+{
+    int message;
+    MPI_Recv(&message, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD,
+             MPI_STATUS_IGNORE);
+
+    return message;
 }
 
 void Server::reset_timeout()
@@ -65,12 +97,7 @@ void Server::reset_leader_timeout()
 void Server::heartbeat()
 {
     reset_leader_timeout();
-
-    int message = 0;
-    MPI_Request request = MPI_REQUEST_NULL;
-
-    SEND_ALL(rank_, MessageTag::HEARTBEAT);
-
+    send(0, MessageTag::HEARTBEAT);
     std::cout << "Sending heatbeat\n";
 }
 
@@ -114,9 +141,7 @@ void Server::candidate()
 
     // Ask for votes for self
     status_ = Status::CANDIDATE;
-    MPI_Request request = MPI_REQUEST_NULL;
-    int message = rank_;
-    SEND_ALL(rank_, MessageTag::REQUEST_VOTE);
+    send(rank_, MessageTag::REQUEST_VOTE);
 
     // Receive answers
     MPI_Status mpi_status;
@@ -137,7 +162,7 @@ void Server::candidate()
             continue;
         }
 
-        RECV_ALL();
+        recv();
 
         if (mpi_status.MPI_TAG == MessageTag::VOTE /* && message == rank_*/)
         {
@@ -154,9 +179,7 @@ void Server::candidate()
             term_++;
 
             // Vote for requester and switch to follower
-            message = term_;
-            MPI_Request request = MPI_REQUEST_NULL;
-            SEND(mpi_status.MPI_SOURCE, MessageTag::VOTE);
+            send(term_, mpi_status.MPI_SOURCE, MessageTag::VOTE);
 
             return follower();
         }
@@ -181,8 +204,7 @@ void Server::follower()
         return;
     }
 
-    MPI_Request request = MPI_REQUEST_NULL;
-    RECV_ALL()
+    message = recv();
 
     std::cout << "received message : " << rank_
               << " source: " << mpi_status.MPI_SOURCE << "\n";
@@ -193,8 +215,7 @@ void Server::follower()
         // Vote
         std::cout << rank_ << " voting for " << mpi_status.MPI_SOURCE << "\n";
         reset_timeout();
-        message = mpi_status.MPI_SOURCE;
-        SEND(mpi_status.MPI_SOURCE, MessageTag::VOTE);
+        send(mpi_status.MPI_SOURCE, mpi_status.MPI_SOURCE, MessageTag::VOTE);
 
         last_voted_term_ = message;
     }

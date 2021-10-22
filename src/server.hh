@@ -56,14 +56,27 @@ public:
     /// \}
 
 protected:
-    void become_leader();
-
     /// Process round depending on status
     /// \{
     void leader();
     void candidate();
     void follower();
     /// \}
+
+private:
+    void become_leader();
+
+    // Send to a particular server
+    void send(int message, int rank, int tag);
+    // Send to all other servers
+    void send(int message, int tag);
+
+    // receive from a server on a particular tag
+    int recv(int rank, int tag);
+    // receive from a server on any tag
+    int recv(int rank);
+    // receive from any server on any tag
+    int recv();
 
 private:
     /// Status of the server
