@@ -4,7 +4,8 @@ CPPFLAGS = -Isrc
 
 SRC = src/main.cc \
       src/client.cc \
-      src/server.cc
+      src/server.cc \
+      src/logger.cc
 
 OBJ = $(SRC:.cc=.o)
 
