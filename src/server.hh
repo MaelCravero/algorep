@@ -70,17 +70,8 @@ private:
     void update_term();
     void update_term(int term);
 
-    // Send to a particular server
-    void send(int message, int rank, int tag);
     // Send to all other servers
-    void send(int message, int tag);
-
-    // receive from a server on a particular tag
-    int recv(int rank, int tag);
-    // receive from a server on any tag
-    int recv(int rank);
-    // receive from any server on any tag
-    int recv();
+    void broadcast(int message, int tag);
 
 private:
     /// Status of the server

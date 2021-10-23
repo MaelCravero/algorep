@@ -1,6 +1,7 @@
 #include "server.hh"
 
 #include <chrono>
+#include <mpi/mpi.hh>
 #include <random>
 
 namespace
@@ -25,53 +26,16 @@ Server::Server(rank rank, int size)
     reset_timeout();
 }
 
-void Server::send(int message, int rank, int tag)
-{
-    // FIXME: Should we do something with this request ?
-    MPI_Request request = MPI_REQUEST_NULL;
-
-    // Shouldn't message be available until it gets received ?
-    // I don't know why this works while message is on the stack and is
-    // dealocated right away
-    MPI_Isend(&message, 1, MPI_INT, rank, tag, MPI_COMM_WORLD, &request);
-}
-
 // Send to all other servers
-void Server::send(int message, int tag)
+void Server::broadcast(int message, int tag)
 {
+    // FIXME This could be done better
+
     MPI_Request request = MPI_REQUEST_NULL;
 
     for (auto i = 0; i < size_; i += 2)
         if (i != rank_)
             MPI_Isend(&message, 1, MPI_INT, i, tag, MPI_COMM_WORLD, &request);
-}
-
-// receive from a server on a particular tag
-int Server::recv(int rank, int tag)
-{
-    int message;
-    MPI_Recv(&message, 1, MPI_INT, rank, tag, MPI_COMM_WORLD,
-             MPI_STATUS_IGNORE);
-
-    return message;
-}
-// receive from a server on any tag
-int Server::recv(int rank)
-{
-    int message;
-    MPI_Recv(&message, 1, MPI_INT, rank, MPI_ANY_TAG, MPI_COMM_WORLD,
-             MPI_STATUS_IGNORE);
-
-    return message;
-}
-// receive from any server on any tag
-int Server::recv()
-{
-    int message;
-    MPI_Recv(&message, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD,
-             MPI_STATUS_IGNORE);
-
-    return message;
 }
 
 void Server::reset_timeout()
@@ -97,7 +61,7 @@ void Server::reset_leader_timeout()
 void Server::heartbeat()
 {
     reset_leader_timeout();
-    send(0, MessageTag::HEARTBEAT);
+    broadcast(0, MessageTag::HEARTBEAT);
     logger_.log(Logger::LogType::INFO, "Sending heatbeat");
 }
 
@@ -120,7 +84,7 @@ void Server::become_leader()
     reset_leader_timeout();
     status_ = Status::LEADER;
     leader_ = rank_;
-    logger_.log(Logger::LogType::DEBUG, "became the leader");
+    logger_.log(Logger::LogType::INFO, "became the leader");
 }
 
 void Server::leader()
@@ -158,7 +122,7 @@ void Server::candidate()
     status_ = Status::CANDIDATE;
 
     // Ask for votes
-    send(term_, MessageTag::REQUEST_VOTE);
+    broadcast(term_, MessageTag::REQUEST_VOTE);
 
     // Receive answers
     MPI_Status mpi_status;
@@ -179,13 +143,14 @@ void Server::candidate()
             continue;
         }
 
-        recv();
+        mpi::recv();
 
         if (mpi_status.MPI_TAG == MessageTag::VOTE /* && message == rank_*/)
         {
             logger_.log(Logger::LogType::INFO,
                         "got a vote from"
                             + std::to_string(mpi_status.MPI_SOURCE));
+
             nb_votes++;
         }
 
@@ -215,7 +180,7 @@ void Server::follower()
         return;
     }
 
-    message = recv();
+    message = mpi::recv();
 
     if (mpi_status.MPI_TAG == MessageTag::REQUEST_VOTE && term_ < message)
     {
@@ -223,7 +188,8 @@ void Server::follower()
         logger_.log(Logger::LogType::INFO,
                     "voting for " + std::to_string(mpi_status.MPI_SOURCE));
         reset_timeout();
-        send(mpi_status.MPI_SOURCE, mpi_status.MPI_SOURCE, MessageTag::VOTE);
+        mpi::send(mpi_status.MPI_SOURCE, mpi_status.MPI_SOURCE,
+                  MessageTag::VOTE);
 
         update_term(message);
     }
