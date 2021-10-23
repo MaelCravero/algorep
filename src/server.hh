@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "common.hh"
-#include "logger.hh"
+#include "utils/logger.hh"
 
 class Server
 {
@@ -98,5 +98,5 @@ private:
     /// Next term of each node in the network
     std::vector<int> next_index_;
 
-    Logger logger_;
+    utils::Logger logger_;
 };
