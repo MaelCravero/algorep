@@ -4,6 +4,8 @@
 #include <mpi/mpi.hh>
 #include <random>
 
+#define LOG(mode) logger_ << utils::Logger::LogType::mode
+
 namespace
 {
     Server::timestamp now()
@@ -62,7 +64,7 @@ void Server::heartbeat()
 {
     reset_leader_timeout();
     broadcast(0, MessageTag::HEARTBEAT);
-    logger_.log(Logger::LogType::INFO, "Sending heatbeat");
+    LOG(INFO) << "sending heatbeat";
 }
 
 void Server::update()
@@ -84,7 +86,7 @@ void Server::become_leader()
     reset_leader_timeout();
     status_ = Status::LEADER;
     leader_ = rank_;
-    logger_.log(Logger::LogType::INFO, "became the leader");
+    LOG(INFO) << "became the leader";
 }
 
 void Server::leader()
@@ -98,16 +100,14 @@ void Server::leader()
 
 void Server::update_term()
 {
-    term_++;
-
-    logger_.log(Logger::LogType::INFO, "Actual term: " + std::to_string(term_));
+    update_term(term_ + 1);
 }
 
 void Server::update_term(int term)
 {
     term_ = term;
 
-    logger_.log(Logger::LogType::INFO, "Actual term: " + std::to_string(term_));
+    LOG(INFO) << "actual term: " << term_;
 }
 
 void Server::candidate()
@@ -117,7 +117,7 @@ void Server::candidate()
 
     update_term();
 
-    logger_.log(Logger::LogType::INFO, "candidate");
+    LOG(INFO) << "candidate";
 
     status_ = Status::CANDIDATE;
 
@@ -147,9 +147,7 @@ void Server::candidate()
 
         if (mpi_status.MPI_TAG == MessageTag::VOTE /* && message == rank_*/)
         {
-            logger_.log(Logger::LogType::INFO,
-                        "got a vote from"
-                            + std::to_string(mpi_status.MPI_SOURCE));
+            LOG(INFO) << "got a vote from " << mpi_status.MPI_SOURCE;
 
             nb_votes++;
         }
@@ -185,8 +183,7 @@ void Server::follower()
     if (mpi_status.MPI_TAG == MessageTag::REQUEST_VOTE && term_ < message)
     {
         // Vote
-        logger_.log(Logger::LogType::INFO,
-                    "voting for " + std::to_string(mpi_status.MPI_SOURCE));
+        LOG(INFO) << "voting for " << mpi_status.MPI_SOURCE;
         reset_timeout();
         mpi::send(mpi_status.MPI_SOURCE, mpi_status.MPI_SOURCE,
                   MessageTag::VOTE);
@@ -196,7 +193,7 @@ void Server::follower()
 
     else if (mpi_status.MPI_TAG == MessageTag::APPEND_ENTRIES)
     {
-        logger_.log(Logger::LogType::INFO, "AppendEntries");
+        LOG(INFO) << "AppendEntries";
         leader_ = mpi_status.MPI_SOURCE;
 
         reset_timeout();
@@ -205,9 +202,7 @@ void Server::follower()
 
     else if (mpi_status.MPI_TAG == MessageTag::HEARTBEAT)
     {
-        logger_.log(Logger::LogType::INFO,
-                    "received heartbeat from "
-                        + std::to_string(mpi_status.MPI_SOURCE));
+        LOG(INFO) << "received heartbeat from " << mpi_status.MPI_SOURCE;
 
         leader_ = mpi_status.MPI_SOURCE;
 
