@@ -67,6 +67,9 @@ protected:
 private:
     void become_leader();
 
+    void update_term();
+    void update_term(int term);
+
     // Send to a particular server
     void send(int message, int rank, int tag);
     // Send to all other servers
@@ -100,9 +103,6 @@ private:
 
     /// Current term
     int term_;
-
-    /// Last voted term
-    int last_voted_term_;
 
     /// Next term of each node in the network
     std::vector<int> next_index_;

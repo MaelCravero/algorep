@@ -19,7 +19,6 @@ Server::Server(rank rank, int size)
     , leader_(-1)
     , timeout_()
     , term_(0)
-    , last_voted_term_(0)
     , next_index_(0)
     , logger_("logs" + std::to_string(rank))
 {
@@ -118,8 +117,9 @@ void Server::update()
 
 void Server::become_leader()
 {
-    status_ = Status::LEADER;
     reset_leader_timeout();
+    status_ = Status::LEADER;
+    leader_ = rank_;
     logger_.log(Logger::LogType::DEBUG, "became the leader");
 }
 
@@ -132,17 +132,33 @@ void Server::leader()
         heartbeat();
 }
 
+void Server::update_term()
+{
+    term_++;
+
+    logger_.log(Logger::LogType::INFO, "Actual term: " + std::to_string(term_));
+}
+
+void Server::update_term(int term)
+{
+    term_ = term;
+
+    logger_.log(Logger::LogType::INFO, "Actual term: " + std::to_string(term_));
+}
+
 void Server::candidate()
 {
     // Next term
-    term_++;
     reset_timeout();
+
+    update_term();
 
     logger_.log(Logger::LogType::INFO, "candidate");
 
-    // Ask for votes for self
     status_ = Status::CANDIDATE;
-    send(rank_, MessageTag::REQUEST_VOTE);
+
+    // Ask for votes
+    send(term_, MessageTag::REQUEST_VOTE);
 
     // Receive answers
     MPI_Status mpi_status;
@@ -201,8 +217,7 @@ void Server::follower()
 
     message = recv();
 
-    if (mpi_status.MPI_TAG == MessageTag::REQUEST_VOTE
-        /* && last_voted_term_ < message */)
+    if (mpi_status.MPI_TAG == MessageTag::REQUEST_VOTE && term_ < message)
     {
         // Vote
         logger_.log(Logger::LogType::INFO,
@@ -210,12 +225,13 @@ void Server::follower()
         reset_timeout();
         send(mpi_status.MPI_SOURCE, mpi_status.MPI_SOURCE, MessageTag::VOTE);
 
-        last_voted_term_ = message;
+        update_term(message);
     }
 
     else if (mpi_status.MPI_TAG == MessageTag::APPEND_ENTRIES)
     {
         logger_.log(Logger::LogType::INFO, "AppendEntries");
+        leader_ = mpi_status.MPI_SOURCE;
 
         reset_timeout();
         // Append entry
@@ -226,6 +242,8 @@ void Server::follower()
         logger_.log(Logger::LogType::INFO,
                     "received heartbeat from "
                         + std::to_string(mpi_status.MPI_SOURCE));
+
+        leader_ = mpi_status.MPI_SOURCE;
 
         reset_timeout();
     }
