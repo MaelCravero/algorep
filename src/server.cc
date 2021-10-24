@@ -19,7 +19,7 @@ Server::Server(rank rank, int size)
     : status_(Status::FOLLOWER)
     , rank_(rank)
     , size_(size)
-    , leader_(-1)
+    , leader_(rank)
     , timeout_()
     , term_(0)
     , next_index_(0)
@@ -63,7 +63,7 @@ void Server::reset_leader_timeout()
 void Server::heartbeat()
 {
     reset_leader_timeout();
-    broadcast(0, MessageTag::HEARTBEAT);
+    broadcast(0, mpi::MessageTag::HEARTBEAT);
     LOG(INFO) << "sending heatbeat";
 }
 
@@ -86,7 +86,7 @@ void Server::become_leader()
     reset_leader_timeout();
     status_ = Status::LEADER;
     leader_ = rank_;
-    LOG(INFO) << "became the leader";
+    LOG(INFO) << "become the leader";
 }
 
 void Server::leader()
@@ -96,6 +96,24 @@ void Server::leader()
 
     if (now() > heartbeat_timeout_)
         heartbeat();
+
+    if (!mpi::available_message())
+        return;
+
+    auto recv_data = mpi::recv();
+    if (recv_data.tag == mpi::MessageTag::CLIENT_REQUEST)
+    {
+        LOG(INFO) << "received message from client:" << recv_data.source;
+        // TODO replicate log
+        mpi::send(recv_data.source, leader_, mpi::MessageTag::ACKNOWLEDGE);
+    }
+
+    else
+    {
+        LOG(DEBUG) << "received message from :" << recv_data.source
+                   << " message : " << recv_data.message << " with tag "
+                   << recv_data.tag;
+    }
 }
 
 void Server::update_term()
@@ -107,7 +125,7 @@ void Server::update_term(int term)
 {
     term_ = term;
 
-    LOG(INFO) << "actual term: " << term_;
+    LOG(INFO) << "current term: " << term_;
 }
 
 void Server::candidate()
@@ -122,10 +140,7 @@ void Server::candidate()
     status_ = Status::CANDIDATE;
 
     // Ask for votes
-    broadcast(term_, MessageTag::REQUEST_VOTE);
-
-    // Receive answers
-    MPI_Status mpi_status;
+    broadcast(term_, mpi::MessageTag::REQUEST_VOTE);
 
     int nb_votes = 1; // Vote for himself
 
@@ -135,27 +150,29 @@ void Server::candidate()
         if (now() > timeout_)
             return candidate();
 
-        int flag;
-        MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag,
-                   &mpi_status);
-        if (!flag)
-        {
+        if (!mpi::available_message())
             continue;
-        }
 
-        mpi::recv();
+        auto recv_data = mpi::recv();
 
-        if (mpi_status.MPI_TAG == MessageTag::VOTE /* && message == rank_*/)
+        if (recv_data.tag == mpi::MessageTag::VOTE)
         {
-            LOG(INFO) << "got a vote from " << mpi_status.MPI_SOURCE;
+            LOG(INFO) << "got a vote from " << recv_data.source;
 
             nb_votes++;
         }
 
-        if (mpi_status.MPI_TAG == MessageTag::HEARTBEAT)
+        else if (recv_data.tag == mpi::MessageTag::HEARTBEAT)
         {
             reset_timeout();
             return;
+        }
+
+        else
+        {
+            LOG(DEBUG) << "received message from :" << recv_data.source
+                       << " message : " << recv_data.message << " with tag "
+                       << recv_data.tag;
         }
     }
 
@@ -163,49 +180,59 @@ void Server::candidate()
         become_leader();
 }
 
+void Server::vote(int server, int message)
+{
+    LOG(INFO) << "voting for " << server;
+    reset_timeout();
+    mpi::send(server, term_, mpi::MessageTag::VOTE);
+
+    update_term(message);
+}
+
+void Server::append_entries(int server, int message)
+{
+    LOG(INFO) << "AppendEntries";
+    leader_ = server;
+
+    reset_timeout();
+    // Append entry
+}
+
 void Server::follower()
 {
     status_ = Status::FOLLOWER;
 
-    MPI_Status mpi_status;
-    int message;
-
-    int flag;
-    MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &mpi_status);
-
-    if (!flag)
-    {
+    if (!mpi::available_message())
         return;
-    }
 
-    message = mpi::recv();
+    auto recv_data = mpi::recv();
 
-    if (mpi_status.MPI_TAG == MessageTag::REQUEST_VOTE && term_ < message)
+    if (recv_data.tag == mpi::MessageTag::REQUEST_VOTE
+        && term_ < recv_data.message)
+        vote(recv_data.source, recv_data.message);
+
+    else if (recv_data.tag == mpi::MessageTag::APPEND_ENTRIES)
+        append_entries(recv_data.source, recv_data.message);
+
+    else if (recv_data.tag == mpi::MessageTag::HEARTBEAT)
     {
-        // Vote
-        LOG(INFO) << "voting for " << mpi_status.MPI_SOURCE;
-        reset_timeout();
-        mpi::send(mpi_status.MPI_SOURCE, mpi_status.MPI_SOURCE,
-                  MessageTag::VOTE);
+        LOG(INFO) << "received heartbeat from " << recv_data.source;
 
-        update_term(message);
-    }
-
-    else if (mpi_status.MPI_TAG == MessageTag::APPEND_ENTRIES)
-    {
-        LOG(INFO) << "AppendEntries";
-        leader_ = mpi_status.MPI_SOURCE;
+        leader_ = recv_data.source;
 
         reset_timeout();
-        // Append entry
     }
 
-    else if (mpi_status.MPI_TAG == MessageTag::HEARTBEAT)
+    else if (recv_data.tag == mpi::MessageTag::CLIENT_REQUEST)
     {
-        LOG(INFO) << "received heartbeat from " << mpi_status.MPI_SOURCE;
+        LOG(INFO) << "received message from client:" << recv_data.source;
+        mpi::send(recv_data.source, leader_, mpi::MessageTag::REJECT);
+    }
 
-        leader_ = mpi_status.MPI_SOURCE;
-
-        reset_timeout();
+    else
+    {
+        LOG(DEBUG) << "received message from :" << recv_data.source
+                   << " message : " << recv_data.message << " with tag "
+                   << recv_data.tag;
     }
 }

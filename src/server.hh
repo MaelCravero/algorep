@@ -24,14 +24,6 @@ public:
         FAILURE,
     };
 
-    enum MessageTag
-    {
-        APPEND_ENTRIES = 0,
-        HEARTBEAT,
-        REQUEST_VOTE,
-        VOTE,
-    };
-
     using timestamp = std::chrono::duration<double>;
 
     Server(rank rank, int size);
@@ -62,6 +54,9 @@ protected:
     void leader();
     void candidate();
     void follower();
+
+    void vote(int server, int message);
+    void append_entries(int server, int message);
     /// \}
 
 private:
