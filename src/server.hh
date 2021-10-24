@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "common.hh"
+#include "utils/log_entries.hh"
 #include "utils/logger.hh"
 
 class Server
@@ -57,7 +58,7 @@ protected:
     void follower();
 
     void vote(int server);
-    void append_entries(int server, int message);
+    void append_entries(int term, int client_id, int data);
     /// \}
 
 private:
@@ -67,9 +68,12 @@ private:
     void update_term(int term);
 
     // Send to all other servers
-    void broadcast(const mpi::Message& message, int tag);
+    void broadcast(const Message& message, int tag);
 
-    mpi::Message init_message(int entry = 0);
+    Message init_message(int entry = 0);
+
+    void handle_client_request(const Message& recv_data);
+    void handle_ack_append_entry(const Message& recv_data);
 
 private:
     /// Status of the server
@@ -79,6 +83,7 @@ private:
     rank rank_;
 
     /// Size of the network
+    /// FIXME: should be number of servers
     int size_;
 
     /// Rank of the leader
@@ -100,9 +105,10 @@ private:
     std::vector<int> match_index_;
 
     /// Log entries
-    std::vector<int> log_entries_;
+    utils::LogEntries log_entries_;
 
-    int commit_index_;
+    // Map log index on nb_acknowledge
+    std::map<int, int> logs_to_be_commited_;
 
     utils::Logger logger_;
 };

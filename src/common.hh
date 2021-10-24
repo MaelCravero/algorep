@@ -1,12 +1,35 @@
 #pragma once
 
 /// Message type passed as tag
-enum MessageType
+enum MessageTag
 {
-    VOTE,
+    APPEND_ENTRIES = 0,
     HEARTBEAT,
-    ACK,
-    COMMIT,
+    REQUEST_VOTE,
+    VOTE,
+    CLIENT_REQUEST,
+    REJECT,
+    ACKNOWLEDGE,
+    ACKNOWLEDGE_APPEND_ENTRIES,
+};
+
+struct Message
+{
+    int term;
+
+    int last_log_index;
+    int last_log_term;
+
+    int entry;
+
+    int client_id;
+    int log_index;
+
+    int leader_id;
+    int leader_commit;
+
+    int source;
+    int tag;
 };
 
 /// Various common types

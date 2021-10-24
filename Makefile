@@ -5,7 +5,8 @@ CPPFLAGS = -Isrc -MMD
 SRC = src/main.cc \
       src/client.cc \
       src/server.cc \
-      src/utils/logger.cc
+      src/utils/logger.cc \
+      src/utils/log_entries.cc
 
 OBJ = $(SRC:.cc=.o)
 
@@ -29,4 +30,4 @@ $(BIN): $(OBJ)
 -include ${DEP}
 
 clean:
-	$(RM) $(OBJ) $(BIN)
+	$(RM) $(OBJ) $(BIN) $(DEP)
