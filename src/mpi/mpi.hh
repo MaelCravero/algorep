@@ -9,6 +9,25 @@
 namespace mpi
 {
     using request = MPI_Request;
+    using status = MPI_Status;
+
+    enum MessageTag
+    {
+        APPEND_ENTRIES = 0,
+        HEARTBEAT,
+        REQUEST_VOTE,
+        VOTE,
+        CLIENT_REQUEST,
+        REJECT,
+        ACKNOWLEDGE,
+    };
+
+    struct RecvData
+    {
+        int message;
+        int source;
+        int tag;
+    };
 
     inline void send(rank dst, int message, int tag)
     {
@@ -21,14 +40,23 @@ namespace mpi
         MPI_Isend(&message, 1, MPI_INT, dst, tag, MPI_COMM_WORLD, &request);
     }
 
-    inline int recv(int src = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG)
+    inline RecvData recv(int src = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG)
     {
         int message;
+        status status;
 
-        MPI_Recv(&message, 1, MPI_INT, src, tag, MPI_COMM_WORLD,
-                 MPI_STATUS_IGNORE);
+        MPI_Recv(&message, 1, MPI_INT, src, tag, MPI_COMM_WORLD, &status);
 
-        return message;
+        return {message, status.MPI_SOURCE, status.MPI_TAG};
+    }
+
+    inline bool available_message(int src = MPI_ANY_SOURCE,
+                                  int tag = MPI_ANY_TAG)
+    {
+        int flag;
+        MPI_Iprobe(src, tag, MPI_COMM_WORLD, &flag, MPI_STATUS_IGNORE);
+
+        return flag;
     }
 
 } // namespace mpi
