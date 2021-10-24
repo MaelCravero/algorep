@@ -16,13 +16,14 @@ BIN = algorep
 
 .PHONY: all run clean
 
-NP ?= 16
+NSERVER ?= 5
+NCLIENT ?= 5
 HOSTFILE ?= hostfile
 
 all: run
 
 run: $(BIN)
-	mpirun -np $(NP) -hostfile $(HOSTFILE) $(BIN)
+	mpirun -np $$(($(NSERVER) + $(NCLIENT))) -hostfile $(HOSTFILE) $(BIN) $(NSERVER) $(NCLIENT)
 
 $(BIN): $(OBJ)
 	$(CXX) -o $@ $^

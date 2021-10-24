@@ -14,10 +14,10 @@ namespace
 
 } // namespace
 
-Server::Server(rank rank, int size)
+Server::Server(rank rank, int nb_server)
     : status_(Status::FOLLOWER)
     , rank_(rank)
-    , size_(size)
+    , nb_server_(nb_server)
     , leader_(rank)
     , timeout_()
     , term_(0)
@@ -54,7 +54,7 @@ void Server::broadcast(const Message& message, int tag)
 {
     // FIXME This could be done better
 
-    for (auto i = 0; i < size_; i += 2)
+    for (auto i = 0; i < nb_server_; i++)
         if (i != rank_)
             mpi::send(i, message, tag);
 }
@@ -134,8 +134,7 @@ void Server::handle_ack_append_entry(const Message& recv_data)
             logs_to_be_commited_[log_entries_.last_log_index().value()] + 1;
         logs_to_be_commited_[log_entries_.last_log_index().value()] = nb_ack;
 
-        // FIXME: div 4
-        if (nb_ack > size_ / 4
+        if (nb_ack > nb_server_ / 2
             && log_entries_.get_commit_index() == recv_data.log_index - 1)
         {
             log_entries_.commit_next_entry();
@@ -150,7 +149,7 @@ void Server::handle_ack_append_entry(const Message& recv_data)
 
             int i = recv_data.log_index + 1;
             while (logs_to_be_commited_.contains(i)
-                   && logs_to_be_commited_[i] > size_ / 4)
+                   && logs_to_be_commited_[i] > nb_server_ / 2)
             {
                 log_entries_.commit_next_entry();
                 logs_to_be_commited_.erase(recv_data.log_index);
@@ -239,7 +238,7 @@ void Server::candidate()
     int nb_votes = 1; // Vote for himself
 
     // Need half of server which is a quarter of processes
-    while (nb_votes <= size_ / 4)
+    while (nb_votes <= nb_server_ / 2)
     {
         if (now() > timeout_)
             return candidate();
@@ -269,7 +268,7 @@ void Server::candidate()
         }
     }
 
-    if (nb_votes > size_ / 4)
+    if (nb_votes > nb_server_ / 2)
         become_leader();
 }
 

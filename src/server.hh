@@ -28,7 +28,7 @@ public:
 
     using timestamp = std::chrono::duration<double>;
 
-    Server(rank rank, int size);
+    Server(rank rank, int nb_server);
 
     /// Update server, if timeout is reached then start an election
     void update();
@@ -83,8 +83,7 @@ private:
     rank rank_;
 
     /// Size of the network
-    /// FIXME: should be number of servers
-    int size_;
+    int nb_server_;
 
     /// Rank of the leader
     rank leader_;
