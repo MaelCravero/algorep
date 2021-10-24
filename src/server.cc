@@ -22,33 +22,35 @@ Server::Server(rank rank, int size)
     , timeout_()
     , term_(0)
     , next_index_(0)
-    , logger_("logs" + std::to_string(rank))
+    , match_index_(0)
+    , log_entries_("entries_server" + std::to_string(rank) + ".log")
+    , logs_to_be_commited_()
+    , logger_("log_server" + std::to_string(rank) + ".log")
 {
     reset_timeout();
 }
 
-mpi::Message Server::init_message(int entry)
+Message Server::init_message(int entry)
 {
-    mpi::Message message;
+    Message message;
 
     message.term = term_;
-    message.last_log_index = log_entries_.size();
+    auto log_index = log_entries_.last_log_index();
+    message.last_log_index = log_index ? log_index.value() : -1;
 
-    // TODO last_log_term
-
-    message.prev_log_index = log_entries_.size() - 1;
-    // TODO prev_log_term
+    auto log_term = log_entries_.last_log_term();
+    message.last_log_term = log_term ? log_term.value() : -1;
 
     message.entry = entry;
 
     message.leader_id = leader_;
-    message.leader_commit = commit_index_;
+    message.leader_commit = log_entries_.get_commit_index();
 
     return message;
 }
 
 // Send to all other servers
-void Server::broadcast(const mpi::Message& message, int tag)
+void Server::broadcast(const Message& message, int tag)
 {
     // FIXME This could be done better
 
@@ -81,7 +83,7 @@ void Server::heartbeat()
 {
     reset_leader_timeout();
     auto message = init_message();
-    broadcast(message, mpi::MessageTag::HEARTBEAT);
+    broadcast(message, MessageTag::HEARTBEAT);
     LOG(INFO) << "sending heatbeat";
 }
 
@@ -107,6 +109,66 @@ void Server::become_leader()
     LOG(INFO) << "become the leader";
 }
 
+void Server::handle_client_request(const Message& recv_data)
+{
+    LOG(INFO) << "received message from client:" << recv_data.source;
+
+    append_entries(term_, recv_data.source, recv_data.entry);
+    logs_to_be_commited_[log_entries_.last_log_index().value()] = 1;
+
+    auto message = init_message(recv_data.entry);
+    message.client_id = recv_data.source;
+    message.log_index = log_entries_.last_log_index().value();
+
+    broadcast(message, MessageTag::APPEND_ENTRIES);
+}
+
+void Server::handle_ack_append_entry(const Message& recv_data)
+{
+    LOG(INFO) << "received acknowledge for log :" << recv_data.log_index
+              << " from server " << recv_data.source;
+
+    if (logs_to_be_commited_.contains(recv_data.log_index))
+    {
+        auto nb_ack =
+            logs_to_be_commited_[log_entries_.last_log_index().value()] + 1;
+        logs_to_be_commited_[log_entries_.last_log_index().value()] = nb_ack;
+
+        // FIXME: div 4
+        if (nb_ack > size_ / 4
+            && log_entries_.get_commit_index() == recv_data.log_index - 1)
+        {
+            log_entries_.commit_next_entry();
+            logs_to_be_commited_.erase(recv_data.log_index);
+
+            // Notify client
+            auto message = init_message();
+            mpi::send(recv_data.client_id, message, MessageTag::ACKNOWLEDGE);
+
+            LOG(INFO) << "Notify client " << recv_data.client_id
+                      << " for request " << recv_data.log_index;
+
+            int i = recv_data.log_index + 1;
+            while (logs_to_be_commited_.contains(i)
+                   && logs_to_be_commited_[i] > size_ / 4)
+            {
+                log_entries_.commit_next_entry();
+                logs_to_be_commited_.erase(recv_data.log_index);
+
+                // Notify client
+                auto message = init_message();
+                mpi::send(log_entries_[i].client_id, message,
+                          MessageTag::ACKNOWLEDGE);
+
+                LOG(INFO) << "Notify client " << recv_data.client_id
+                          << " for request " << recv_data.log_index;
+
+                i++;
+            }
+        }
+    }
+}
+
 void Server::leader()
 {
     // heartbeat back/forth
@@ -119,19 +181,13 @@ void Server::leader()
         return;
 
     auto recv_data = mpi::recv();
-    if (recv_data.tag == mpi::MessageTag::CLIENT_REQUEST)
-    {
-        LOG(INFO) << "received message from client:" << recv_data.source;
-        // TODO replicate log
+    if (recv_data.tag == MessageTag::CLIENT_REQUEST)
+        handle_client_request(recv_data);
 
-        broadcast(recv_data, mpi::MessageTag::APPEND_ENTRIES);
+    if (recv_data.tag == MessageTag::ACKNOWLEDGE_APPEND_ENTRIES)
+        handle_ack_append_entry(recv_data);
 
-        auto message = init_message();
-        mpi::send(recv_data.source, message, mpi::MessageTag::ACKNOWLEDGE);
-    }
-
-    else if (recv_data.tag == mpi::MessageTag::HEARTBEAT
-             && recv_data.term > term_)
+    else if (recv_data.tag == MessageTag::HEARTBEAT && recv_data.term > term_)
     {
         LOG(INFO) << "received heartbeat from more legitimate leader: "
                   << recv_data.source;
@@ -142,7 +198,7 @@ void Server::leader()
         update_term(recv_data.term);
 
         auto message = init_message();
-        mpi::send(recv_data.source, message, mpi::MessageTag::ACKNOWLEDGE);
+        mpi::send(recv_data.source, message, MessageTag::ACKNOWLEDGE);
 
         reset_timeout();
     }
@@ -168,7 +224,6 @@ void Server::update_term(int term)
 
 void Server::candidate()
 {
-    // Next term
     reset_timeout();
 
     update_term();
@@ -179,7 +234,7 @@ void Server::candidate()
 
     // Ask for votes
     auto message = init_message();
-    broadcast(message, mpi::MessageTag::REQUEST_VOTE);
+    broadcast(message, MessageTag::REQUEST_VOTE);
 
     int nb_votes = 1; // Vote for himself
 
@@ -194,14 +249,14 @@ void Server::candidate()
 
         auto recv_data = mpi::recv();
 
-        if (recv_data.tag == mpi::MessageTag::VOTE)
+        if (recv_data.tag == MessageTag::VOTE)
         {
             LOG(INFO) << "got a vote from " << recv_data.source;
 
             nb_votes++;
         }
 
-        else if (recv_data.tag == mpi::MessageTag::HEARTBEAT)
+        else if (recv_data.tag == MessageTag::HEARTBEAT)
         {
             reset_timeout();
             return;
@@ -224,16 +279,14 @@ void Server::vote(int server)
     reset_timeout();
 
     auto message = init_message();
-    mpi::send(server, message, mpi::MessageTag::VOTE);
+    mpi::send(server, message, MessageTag::VOTE);
 }
 
-void Server::append_entries(int server, int)
+void Server::append_entries(int term, int client_id, int data)
 {
     LOG(INFO) << "AppendEntries";
-    leader_ = server;
 
-    reset_timeout();
-    // Append entry
+    log_entries_.append_entry(term, client_id, data);
 }
 
 void Server::follower()
@@ -245,32 +298,43 @@ void Server::follower()
 
     auto recv_data = mpi::recv();
 
-    if (recv_data.tag == mpi::MessageTag::REQUEST_VOTE
-        && term_ < recv_data.term)
+    if (recv_data.tag == MessageTag::REQUEST_VOTE && term_ < recv_data.term)
     {
         vote(recv_data.source);
 
         update_term(recv_data.term);
     }
 
-    else if (recv_data.tag == mpi::MessageTag::APPEND_ENTRIES)
-        append_entries(recv_data.source, recv_data.entry);
+    else if (recv_data.tag == MessageTag::APPEND_ENTRIES)
+    {
+        leader_ = recv_data.source;
+        reset_timeout();
 
-    else if (recv_data.tag == mpi::MessageTag::HEARTBEAT)
+        append_entries(recv_data.term, recv_data.client_id, recv_data.entry);
+
+        mpi::send(leader_, recv_data, MessageTag::ACKNOWLEDGE_APPEND_ENTRIES);
+    }
+
+    else if (recv_data.tag == MessageTag::HEARTBEAT)
     {
         LOG(INFO) << "received heartbeat from " << recv_data.source;
 
         leader_ = recv_data.source;
 
+        while (recv_data.leader_commit > log_entries_.get_commit_index())
+        {
+            log_entries_.commit_next_entry();
+        }
+
         reset_timeout();
     }
 
-    else if (recv_data.tag == mpi::MessageTag::CLIENT_REQUEST)
+    else if (recv_data.tag == MessageTag::CLIENT_REQUEST)
     {
         LOG(INFO) << "received message from client:" << recv_data.source;
 
         auto message = init_message();
-        mpi::send(recv_data.source, message, mpi::MessageTag::REJECT);
+        mpi::send(recv_data.source, message, MessageTag::REJECT);
     }
 
     else

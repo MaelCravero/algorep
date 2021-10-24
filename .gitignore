@@ -3,6 +3,6 @@ compile_commands.json
 .cache
 *.o
 *.d
-log*
+*.log
 algorep
 tags

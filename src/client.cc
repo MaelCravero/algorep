@@ -17,12 +17,13 @@ void Client::send_request()
 
     while (true)
     {
-        MPI_Send(&rank_, 1, MPI_INT, server, mpi::MessageTag::CLIENT_REQUEST,
-                 MPI_COMM_WORLD);
+        Message message;
+        message.entry = rank_;
+        mpi::send(server, message, MessageTag::CLIENT_REQUEST);
 
         auto recv_data = mpi::recv(server);
 
-        if (recv_data.tag == mpi::MessageTag::REJECT)
+        if (recv_data.tag == MessageTag::REJECT)
         {
             server = recv_data.leader_id;
             std::this_thread::sleep_for(500ms);
