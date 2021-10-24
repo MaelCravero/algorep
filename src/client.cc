@@ -5,33 +5,31 @@
 
 #include "mpi/mpi.hh"
 
-Client::Client(int rank, int size)
+Client::Client(int rank, int nb_server)
     : rank_(rank)
-    , size_(size)
+    , nb_server_(nb_server)
+    , server_(rank % nb_server)
 {}
 
-void Client::send_request()
+bool Client::send_request()
 {
     using namespace std::chrono_literals;
-    int server = (rank_ + 1) % size_;
 
-    while (true)
+    Message message;
+    message.entry = rank_;
+    mpi::send(server_, message, MessageTag::CLIENT_REQUEST);
+
+    auto recv_data = mpi::recv(server_);
+
+    if (recv_data.tag == MessageTag::REJECT)
     {
-        Message message;
-        message.entry = rank_;
-        mpi::send(server, message, MessageTag::CLIENT_REQUEST);
+        server_ = recv_data.leader_id;
+        std::this_thread::sleep_for(500ms);
+        return false;
+    }
 
-        auto recv_data = mpi::recv(server);
-
-        if (recv_data.tag == MessageTag::REJECT)
-        {
-            server = recv_data.leader_id;
-            std::this_thread::sleep_for(500ms);
-        }
-        else
-        {
-            // Request succesfully commited
-            break;
-        }
+    else
+    {
+        return true;
     }
 }

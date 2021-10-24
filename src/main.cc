@@ -4,9 +4,9 @@
 #include "client.hh"
 #include "server.hh"
 
-void server(rank rank, int size)
+void server(rank rank, int nb_server)
 {
-    Server server(rank, size);
+    Server server(rank, nb_server);
 
     while (true)
     {
@@ -14,15 +14,17 @@ void server(rank rank, int size)
     }
 }
 
-void client(rank rank, int size)
+void client(rank rank, int nb_server)
 {
-    Client client(rank, size);
-    client.send_request();
+    Client client(rank, nb_server);
+
+    while (!client.send_request())
+        continue;
 }
 
-bool is_client(int rank)
+bool is_client(int rank, int nb_server)
 {
-    return rank % 2;
+    return rank >= nb_server;
 }
 
 int main(int argc, char* argv[])
@@ -33,10 +35,28 @@ int main(int argc, char* argv[])
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    if (is_client(rank))
-        client(rank, size);
+    // TODO: add a real argument parser ?
+    if (argc != 3)
+    {
+        if (!rank)
+            std::cout << "usage: " << argv[0] << " nb_server nb_client\n";
+        return 1;
+    }
+
+    int nb_server = std::stoi(argv[1]);
+    int nb_client = std::stoi(argv[2]);
+
+    if (!rank)
+    {
+        std::cout << "nb_server: " << nb_server << " nb_client: " << nb_client
+                  << "\n";
+    }
+
+    if (is_client(rank, nb_server))
+        client(rank, nb_server);
+
     else
-        server(rank, size);
+        server(rank, nb_server);
 
     MPI_Finalize();
 

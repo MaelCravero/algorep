@@ -7,11 +7,12 @@
 class Client
 {
 public:
-    Client(rank rank, int size);
+    Client(rank rank, int nb_server);
 
-    void send_request();
+    bool send_request();
 
 private:
     rank rank_;
-    int size_;
+    int nb_server_;
+    int server_;
 };
