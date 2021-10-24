@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <mpi.h>
+#include <mpi/mpi.hh>
 #include <string>
 #include <vector>
 
@@ -55,7 +56,7 @@ protected:
     void candidate();
     void follower();
 
-    void vote(int server, int message);
+    void vote(int server);
     void append_entries(int server, int message);
     /// \}
 
@@ -66,7 +67,9 @@ private:
     void update_term(int term);
 
     // Send to all other servers
-    void broadcast(int message, int tag);
+    void broadcast(const mpi::Message& message, int tag);
+
+    mpi::Message init_message(int entry = 0);
 
 private:
     /// Status of the server
@@ -90,8 +93,16 @@ private:
     /// Current term
     int term_;
 
-    /// Next term of each node in the network
+    /// index of the next log entry to send to that server
     std::vector<int> next_index_;
+
+    /// index of highest log entry known to be replicated on server
+    std::vector<int> match_index_;
+
+    /// Log entries
+    std::vector<int> log_entries_;
+
+    int commit_index_;
 
     utils::Logger logger_;
 };
