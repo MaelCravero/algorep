@@ -1,6 +1,6 @@
 CXX = mpic++
 CXXFLAGS = -Wall -Wextra -pedantic -std=c++20
-CPPFLAGS = -Isrc
+CPPFLAGS = -Isrc -MMD
 
 SRC = src/main.cc \
       src/client.cc \
@@ -8,6 +8,8 @@ SRC = src/main.cc \
       src/utils/logger.cc
 
 OBJ = $(SRC:.cc=.o)
+
+DEP = ${SRC:.cc=.d}
 
 BIN = algorep
 
@@ -22,7 +24,9 @@ run: $(BIN)
 	mpirun -np $(NP) -hostfile $(HOSTFILE) $(BIN)
 
 $(BIN): $(OBJ)
-	$(CXX) -o $@ $^ 
+	$(CXX) -o $@ $^
+
+-include ${DEP}
 
 clean:
 	$(RM) $(OBJ) $(BIN)
