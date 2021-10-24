@@ -24,7 +24,7 @@ void Client::send_request()
 
         if (recv_data.tag == mpi::MessageTag::REJECT)
         {
-            server = recv_data.message;
+            server = recv_data.leader_id;
             std::this_thread::sleep_for(500ms);
         }
         else
