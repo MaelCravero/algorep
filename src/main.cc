@@ -4,14 +4,12 @@
 #include "client.hh"
 #include "server.hh"
 
-void server(rank rank, int nb_server)
+void server(rank rank, int nb_server, int nb_client)
 {
     Server server(rank, nb_server);
 
-    while (true)
-    {
+    while (server.get_log_number() != nb_client)
         server.update();
-    }
 }
 
 void client(rank rank, int nb_server)
@@ -56,7 +54,7 @@ int main(int argc, char* argv[])
         client(rank, nb_server);
 
     else
-        server(rank, nb_server);
+        server(rank, nb_server, nb_client);
 
     MPI_Finalize();
 

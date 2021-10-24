@@ -101,6 +101,11 @@ void Server::update()
         leader();
 }
 
+int Server::get_log_number() const
+{
+    return log_entries_.get_commit_index() + 1;
+}
+
 void Server::become_leader()
 {
     reset_leader_timeout();
@@ -138,6 +143,7 @@ void Server::handle_ack_append_entry(const Message& recv_data)
             && log_entries_.get_commit_index() == recv_data.log_index - 1)
         {
             log_entries_.commit_next_entry();
+            LOG(INFO) << "commited log number: " << get_log_number();
             logs_to_be_commited_.erase(recv_data.log_index);
 
             // Notify client
@@ -152,6 +158,7 @@ void Server::handle_ack_append_entry(const Message& recv_data)
                    && logs_to_be_commited_[i] > nb_server_ / 2)
             {
                 log_entries_.commit_next_entry();
+                LOG(INFO) << "commited log number: " << get_log_number();
                 logs_to_be_commited_.erase(recv_data.log_index);
 
                 // Notify client
@@ -164,6 +171,9 @@ void Server::handle_ack_append_entry(const Message& recv_data)
 
                 i++;
             }
+
+            // heartbeat no notify about the new commit index
+            heartbeat();
         }
     }
 }
@@ -323,6 +333,7 @@ void Server::follower()
         while (recv_data.leader_commit > log_entries_.get_commit_index())
         {
             log_entries_.commit_next_entry();
+            LOG(INFO) << "commited log number: " << get_log_number();
         }
 
         reset_timeout();

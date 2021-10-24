@@ -33,14 +33,7 @@ public:
     /// Update server, if timeout is reached then start an election
     void update();
 
-    void start_election();
-    void request_vote();
-
-    void heartbeat();
-    void reset_timeout();
-    void reset_leader_timeout();
-
-    AppendEntriesStatus append_entries(std::string log);
+    int get_log_number() const;
 
     /// Accessors
     /// \{
@@ -62,6 +55,13 @@ protected:
     /// \}
 
 private:
+    void start_election();
+    void request_vote();
+
+    void heartbeat();
+    void reset_timeout();
+    void reset_leader_timeout();
+
     void become_leader();
 
     void update_term();
