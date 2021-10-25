@@ -9,7 +9,7 @@
 Client::Client(int rank, int nb_server)
     : rank_(rank)
     , nb_server_(nb_server)
-    , server_(rank % nb_server)
+    , server_(rank % nb_server + 1)
 {}
 
 bool Client::send_request()
