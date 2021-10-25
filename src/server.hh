@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "client.hh"
 #include "common.hh"
 #include "utils/log_entries.hh"
 #include "utils/logger.hh"
@@ -24,6 +25,22 @@ public:
     {
         SUCCESS,
         FAILURE,
+    };
+
+    struct ServerMessage : public Message
+    {
+        int term;
+
+        int last_log_index;
+        int last_log_term;
+
+        int entry;
+
+        int client_id;
+        int log_index;
+
+        int leader_id;
+        int leader_commit;
     };
 
     using timestamp = std::chrono::duration<double>;
@@ -60,7 +77,7 @@ private:
 
     void heartbeat();
     void reset_timeout();
-    void reset_leader_timeout();
+    void reset_heartbeat_timeout();
 
     void become_leader();
 
@@ -68,12 +85,14 @@ private:
     void update_term(int term);
 
     // Send to all other servers
-    void broadcast(const Message& message, int tag);
+    void broadcast(const ServerMessage& message, int tag);
 
-    Message init_message(int entry = 0);
+    ServerMessage init_message(int entry = 0);
 
-    void handle_client_request(const Message& recv_data);
-    void handle_ack_append_entry(const Message& recv_data);
+    void handle_client_request();
+    void handle_ack_append_entry(const ServerMessage& recv_data);
+
+    void commit_entry(int log_index, int client_id);
 
 private:
     /// Status of the server

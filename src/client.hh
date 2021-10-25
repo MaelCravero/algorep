@@ -7,6 +7,11 @@
 class Client
 {
 public:
+    struct ClientMessage : public Message
+    {
+        int entry;
+    };
+
     Client(rank rank, int nb_server);
 
     bool send_request();

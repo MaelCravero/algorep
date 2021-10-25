@@ -15,19 +15,6 @@ enum MessageTag
 
 struct Message
 {
-    int term;
-
-    int last_log_index;
-    int last_log_term;
-
-    int entry;
-
-    int client_id;
-    int log_index;
-
-    int leader_id;
-    int leader_commit;
-
     int source;
     int tag;
 };

@@ -31,4 +31,4 @@ $(BIN): $(OBJ)
 -include ${DEP}
 
 clean:
-	$(RM) $(OBJ) $(BIN) $(DEP)
+	$(RM) $(OBJ) $(BIN) $(DEP) *.log
