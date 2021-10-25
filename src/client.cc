@@ -4,6 +4,7 @@
 #include <thread>
 
 #include "mpi/mpi.hh"
+#include "server.hh"
 
 Client::Client(int rank, int nb_server)
     : rank_(rank)
@@ -15,11 +16,11 @@ bool Client::send_request()
 {
     using namespace std::chrono_literals;
 
-    Message message;
+    ClientMessage message;
     message.entry = rank_;
     mpi::send(server_, message, MessageTag::CLIENT_REQUEST);
 
-    auto recv_data = mpi::recv<Message>(server_);
+    auto recv_data = mpi::recv<Server::ServerMessage>(server_);
 
     if (recv_data.tag == MessageTag::REJECT)
     {

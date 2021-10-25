@@ -33,19 +33,23 @@ namespace mpi
         // Convert the char* buffer back to Message type and add source and tag
         // info
         M message = *reinterpret_cast<M*>(buffer);
+
         message.source = status.MPI_SOURCE;
         message.tag = status.MPI_TAG;
 
         return message;
     }
 
-    inline bool available_message(int src = MPI_ANY_SOURCE,
-                                  int tag = MPI_ANY_TAG)
+    inline std::optional<int> available_message(int src = MPI_ANY_SOURCE,
+                                                int tag = MPI_ANY_TAG)
     {
         int flag;
-        MPI_Iprobe(src, tag, MPI_COMM_WORLD, &flag, MPI_STATUS_IGNORE);
+        status status;
+        MPI_Iprobe(src, tag, MPI_COMM_WORLD, &flag, &status);
 
-        return flag;
+        if (!flag)
+            return {};
+        return status.MPI_TAG;
     }
 
 } // namespace mpi
