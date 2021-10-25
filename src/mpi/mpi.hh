@@ -11,26 +11,30 @@ namespace mpi
 {
     using status = MPI_Status;
 
-    inline void send(rank dst, const Message& message, int tag)
+    template <typename M>
+    inline void send(rank dst, const M& message, int tag)
     {
-        int buffer[8] = {message.term,          message.last_log_index,
-                         message.last_log_term, message.entry,
-                         message.client_id,     message.log_index,
-                         message.leader_id,     message.leader_commit};
+        // Convert the message to a char* buffer to send it the same way no
+        // matter the type of Message
+        const char* buffer = reinterpret_cast<const char*>(&message);
 
-        MPI_Bsend(buffer, 8, MPI_INT, dst, tag, MPI_COMM_WORLD);
+        MPI_Bsend(buffer, sizeof(M), MPI_CHAR, dst, tag, MPI_COMM_WORLD);
     }
 
-    inline Message recv(int src = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG)
+    template <typename M>
+    inline M recv(int src = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG)
     {
-        int buffer[8];
+        char buffer[sizeof(M)];
         status status;
 
-        MPI_Recv(buffer, 8, MPI_INT, src, tag, MPI_COMM_WORLD, &status);
+        MPI_Recv(buffer, sizeof(M), MPI_CHAR, src, tag, MPI_COMM_WORLD,
+                 &status);
 
-        Message message = {
-            buffer[0], buffer[1], buffer[2], buffer[3],         buffer[4],
-            buffer[5], buffer[6], buffer[7], status.MPI_SOURCE, status.MPI_TAG};
+        // Convert the char* buffer back to Message type and add source and tag
+        // info
+        M message = *reinterpret_cast<M*>(buffer);
+        message.source = status.MPI_SOURCE;
+        message.tag = status.MPI_TAG;
 
         return message;
     }
