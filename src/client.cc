@@ -19,7 +19,7 @@ bool Client::send_request()
     message.entry = rank_;
     mpi::send(server_, message, MessageTag::CLIENT_REQUEST);
 
-    auto recv_data = mpi::recv(server_);
+    auto recv_data = mpi::recv<Message>(server_);
 
     if (recv_data.tag == MessageTag::REJECT)
     {

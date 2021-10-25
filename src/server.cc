@@ -189,7 +189,7 @@ void Server::leader()
     if (!mpi::available_message())
         return;
 
-    auto recv_data = mpi::recv();
+    auto recv_data = mpi::recv<Message>();
     if (recv_data.tag == MessageTag::CLIENT_REQUEST)
         handle_client_request(recv_data);
 
@@ -256,7 +256,7 @@ void Server::candidate()
         if (!mpi::available_message())
             continue;
 
-        auto recv_data = mpi::recv();
+        auto recv_data = mpi::recv<Message>();
 
         if (recv_data.tag == MessageTag::VOTE)
         {
@@ -305,7 +305,7 @@ void Server::follower()
     if (!mpi::available_message())
         return;
 
-    auto recv_data = mpi::recv();
+    auto recv_data = mpi::recv<Message>();
 
     if (recv_data.tag == MessageTag::REQUEST_VOTE && term_ < recv_data.term)
     {
