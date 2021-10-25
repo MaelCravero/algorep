@@ -62,7 +62,7 @@ Server::ServerMessage Server::init_message(int entry)
 
 void Server::broadcast(const ServerMessage& message, int tag)
 {
-    for (auto i = 0; i < nb_server_; i++)
+    for (auto i = 1; i <= nb_server_; i++)
         if (i != rank_)
             mpi::send(i, message, tag);
 }

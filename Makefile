@@ -5,6 +5,7 @@ CPPFLAGS = -Isrc -MMD
 SRC = src/main.cc \
       src/client.cc \
       src/server.cc \
+      src/repl.cc \
       src/utils/logger.cc \
       src/utils/log_entries.cc
 
@@ -23,7 +24,7 @@ HOSTFILE ?= hostfile
 all: run
 
 run: $(BIN)
-	mpirun -np $$(($(NSERVER) + $(NCLIENT))) -hostfile $(HOSTFILE) $(BIN) $(NSERVER) $(NCLIENT)
+	mpirun -np $$(($(NSERVER) + $(NCLIENT) + 1)) -hostfile $(HOSTFILE) $(BIN) $(NSERVER) $(NCLIENT)
 
 $(BIN): $(OBJ)
 	$(CXX) -o $@ $^
