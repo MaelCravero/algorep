@@ -11,6 +11,7 @@ enum MessageTag
     REJECT,
     ACKNOWLEDGE,
     ACKNOWLEDGE_APPEND_ENTRIES,
+    REPL,
 };
 
 struct Message

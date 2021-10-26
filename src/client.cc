@@ -4,12 +4,14 @@
 #include <thread>
 
 #include "mpi/mpi.hh"
+#include "repl.hh"
 #include "server.hh"
 
 Client::Client(int rank, int nb_server)
     : rank_(rank)
     , nb_server_(nb_server)
     , server_(rank % nb_server + 1)
+    , started_(false)
 {}
 
 bool Client::send_request()
@@ -33,4 +35,22 @@ bool Client::send_request()
     {
         return true;
     }
+}
+
+bool Client::started()
+{
+    return started_;
+}
+
+bool Client::recv_order()
+{
+    auto tag = mpi::available_message(MPI_ANY_SOURCE, MessageTag::REPL);
+
+    if (!tag)
+        return false;
+
+    mpi::recv<Repl::ReplMessage>();
+
+    started_ = true;
+    return true;
 }

@@ -15,9 +15,13 @@ public:
     Client(rank rank, int nb_server);
 
     bool send_request();
+    bool started();
+    bool recv_order();
 
 private:
     rank rank_;
     int nb_server_;
     int server_;
+
+    bool started_;
 };

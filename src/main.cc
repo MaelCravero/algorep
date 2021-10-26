@@ -17,13 +17,21 @@ void client(rank rank, int nb_server)
 {
     Client client(rank, nb_server);
 
-    while (!client.send_request())
-        continue;
+    while (true)
+    {
+        if (client.started())
+        {
+            if (client.send_request())
+                return;
+        }
+        else
+            client.recv_order();
+    }
 }
 
-void repl(int nb_server)
+void repl(int nb_server, int nb_client)
 {
-    Repl repl(nb_server);
+    Repl repl(nb_server, nb_client);
 
     repl();
 }
@@ -75,7 +83,7 @@ int main(int argc, char* argv[])
         server(rank, nb_server, nb_client);
 
     else if (is_repl(rank))
-        repl(nb_server);
+        repl(nb_server, nb_client);
 
     MPI_Finalize();
 
