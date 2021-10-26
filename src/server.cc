@@ -189,6 +189,20 @@ void Server::handle_ack_append_entry(const ServerMessage& recv_data)
     }
 }
 
+void Server::ignore_messages()
+{
+    while (auto tag = mpi::available_message())
+    {
+        if (tag.value() == MessageTag::REPL)
+            break;
+
+        if (tag.value() == MessageTag::CLIENT_REQUEST)
+            mpi::recv<Client::ClientMessage>();
+        else
+            mpi::recv<ServerMessage>();
+    }
+}
+
 void Server::leader()
 {
     // heartbeat back/forth
@@ -196,6 +210,9 @@ void Server::leader()
 
     if (now() > heartbeat_timeout_ && !has_crashed_)
         heartbeat();
+
+    if (has_crashed_)
+        ignore_messages();
 
     auto tag = mpi::available_message();
     if (!tag)
@@ -349,6 +366,9 @@ void Server::append_entries(int term, int client_id, int data)
 void Server::follower()
 {
     status_ = Status::FOLLOWER;
+
+    if (has_crashed_)
+        ignore_messages();
 
     if (auto tag = mpi::available_message())
     {

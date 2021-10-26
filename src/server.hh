@@ -95,6 +95,8 @@ private:
 
     void commit_entry(int log_index, int client_id);
 
+    void ignore_messages();
+
 private:
     /// Status of the server
     Status status_;
