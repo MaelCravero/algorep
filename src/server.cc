@@ -3,6 +3,8 @@
 #include <chrono>
 #include <random>
 
+#include "repl.hh"
+
 #define LOG(mode) logger_ << utils::Logger::LogType::mode
 
 namespace
@@ -32,6 +34,7 @@ Server::Server(rank rank, int nb_server)
     , leader_(rank)
     , timeout_()
     , term_(0)
+    , has_crashed_(false)
     , next_index_(0)
     , match_index_(0)
     , log_entries_("entries_server" + std::to_string(rank) + ".log")
@@ -89,7 +92,7 @@ void Server::update()
 {
     if (status_ != Status::LEADER)
     {
-        if (now() > timeout_)
+        if (now() > timeout_ && !has_crashed_)
             return candidate();
 
         follower();
@@ -126,6 +129,22 @@ void Server::handle_client_request()
     message.log_index = log_entries_.last_log_index().value();
 
     broadcast(message, MessageTag::APPEND_ENTRIES);
+}
+
+void Server::handle_repl_request()
+{
+    auto message = mpi::recv<Repl::ReplMessage>();
+    if (message.order == Repl::Order::PRINT)
+    {
+        std::cout << "Server: " << rank_ << "/" << nb_server_ << "\n";
+        std::cout << " Crash: " << std::boolalpha << has_crashed_ << "\n";
+        std::cout << "Leader: " << leader_ << "\n";
+        std::cout << "  Term: " << term_ << "\n";
+        std::cout << "NbLogs: " << log_entries_.get_commit_index() + 1 << "/"
+                  << log_entries_.size() << "\n\n";
+    }
+    if (message.order == Repl::Order::CRASH)
+        has_crashed_ = true;
 }
 
 void Server::commit_entry(int log_index, int client_id)
@@ -175,11 +194,17 @@ void Server::leader()
     // heartbeat back/forth
     // if msg: ask confirmation
 
-    if (now() > heartbeat_timeout_)
+    if (now() > heartbeat_timeout_ && !has_crashed_)
         heartbeat();
 
     auto tag = mpi::available_message();
     if (!tag)
+        return;
+
+    if (tag.value() == MessageTag::REPL)
+        return handle_repl_request();
+
+    if (has_crashed_)
         return;
 
     if (tag.value() == MessageTag::CLIENT_REQUEST)
@@ -248,6 +273,12 @@ void Server::candidate()
 
         if (auto tag = mpi::available_message())
         {
+            if (tag.value() == MessageTag::REPL)
+                return handle_repl_request();
+
+            if (has_crashed_)
+                return;
+
             if (tag.value() == MessageTag::VOTE)
             {
                 auto recv_data = mpi::recv<ServerMessage>();
@@ -321,6 +352,12 @@ void Server::follower()
 
     if (auto tag = mpi::available_message())
     {
+        if (tag.value() == MessageTag::REPL)
+            return handle_repl_request();
+
+        if (has_crashed_)
+            return;
+
         if (tag.value() == MessageTag::CLIENT_REQUEST)
         {
             auto recv_data = mpi::recv<Client::ClientMessage>();
