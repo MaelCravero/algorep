@@ -90,6 +90,7 @@ private:
     ServerMessage init_message(int entry = 0);
 
     void handle_client_request();
+    void handle_repl_request();
     void handle_ack_append_entry(const ServerMessage& recv_data);
 
     void commit_entry(int log_index, int client_id);
@@ -115,6 +116,9 @@ private:
 
     /// Current term
     int term_;
+
+    /// Crash status
+    bool has_crashed_;
 
     /// index of the next log entry to send to that server
     std::vector<int> next_index_;

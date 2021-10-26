@@ -26,6 +26,7 @@ namespace utils
 
         int get_commit_index() const;
         void commit_next_entry();
+        size_t size() const;
 
         Entry& operator[](int i);
 

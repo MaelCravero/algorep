@@ -45,6 +45,11 @@ namespace utils
                   << " data: " << entry.data;
     }
 
+    size_t LogEntries::size() const
+    {
+        return entries_.size();
+    }
+
     LogEntries::Entry& LogEntries::operator[](int i)
     {
         return entries_[i];
