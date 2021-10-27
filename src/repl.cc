@@ -1,5 +1,6 @@
 #include "repl.hh"
 
+#include <iostream>
 #include <sstream>
 
 #include "mpi/mpi.hh"

@@ -1,6 +1,7 @@
 #include "server.hh"
 
 #include <chrono>
+#include <iostream>
 #include <random>
 
 #include "repl.hh"
