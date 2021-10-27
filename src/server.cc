@@ -35,6 +35,7 @@ Server::Server(rank rank, int nb_server)
     , rank_(rank)
     , nb_server_(nb_server)
     , leader_(rank)
+    , speed_mod_(1)
     , timeout_()
     , term_(0)
     , has_crashed_(false)
@@ -76,12 +77,12 @@ void Server::broadcast(const ServerMessage& message, int tag)
 
 void Server::reset_timeout()
 {
-    timeout_ = get_new_timeout(0.5, 1);
+    timeout_ = get_new_timeout(0.5 * speed_mod_, 1 * speed_mod_);
 }
 
 void Server::reset_heartbeat_timeout()
 {
-    heartbeat_timeout_ = get_new_timeout(0.1, 0.15);
+    heartbeat_timeout_ = get_new_timeout(0.1 * speed_mod_, 0.15 * speed_mod_);
 }
 
 void Server::heartbeat()
@@ -94,6 +95,10 @@ void Server::heartbeat()
 
 void Server::update()
 {
+    if (speed_mod_ > 1)
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(20 * (speed_mod_ / 3)));
+
     if (status_ != Status::LEADER)
     {
         if (now() > timeout_ && !has_crashed_)
@@ -147,12 +152,15 @@ void Server::handle_repl_request()
 
         std::cout << "Server: " << rank_ << "/" << nb_server_ << "\n";
         std::cout << "   PID: " << getpid() << "\n";
+        std::cout << " Speed: " << speed_mod_ << "\n";
         std::cout << " Crash: " << std::boolalpha << has_crashed_ << "\n";
         std::cout << "Leader: " << leader_ << "\n";
         std::cout << "  Term: " << term_ << "\n";
         std::cout << "NbLogs: " << log_entries_.get_commit_index() + 1 << "/"
                   << log_entries_.size() << "\n\n";
     }
+    if (message.order == Repl::Order::SPEED)
+        speed_mod_ = message.speed_level;
     if (message.order == Repl::Order::CRASH)
         has_crashed_ = true;
     if (message.order == Repl::Order::RECOVERY)

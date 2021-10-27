@@ -111,6 +111,8 @@ private:
     /// Rank of the leader
     rank leader_;
 
+    int speed_mod_;
+
     /// Timestamp of the timeout
     timestamp timeout_;
 

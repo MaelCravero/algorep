@@ -25,11 +25,11 @@ std::optional<Repl::Command> Repl::parse_command(std::string line)
         iss >> str;
 
         if (str == "low")
-            command.speed_level = 1;
+            command.speed_level = 10;
         else if (str == "medium")
-            command.speed_level = 2;
-        else if (str == "high")
             command.speed_level = 3;
+        else if (str == "high")
+            command.speed_level = 1;
         else
             return {};
     }
