@@ -1,5 +1,5 @@
 CXX = mpic++
-CXXFLAGS = -Wall -Wextra -pedantic -std=c++20
+CXXFLAGS = -Wall -Wextra -pedantic -std=c++20 -g
 CPPFLAGS = -Isrc -MMD
 
 SRC = src/main.cc \
@@ -20,6 +20,8 @@ BIN = algorep
 NSERVER ?= 5
 NCLIENT ?= 5
 HOSTFILE ?= hostfile
+CMD_FILE ?= commands.txt
+NCMD ?= 5
 
 all: run
 
@@ -28,6 +30,9 @@ run: $(BIN)
 
 $(BIN): $(OBJ)
 	$(CXX) -o $@ $^
+
+gen_commands:
+	./gen_cmd.sh $(NSERVER) $(NCLIENT) $(CMD_FILE) $(NCMD)
 
 -include ${DEP}
 
