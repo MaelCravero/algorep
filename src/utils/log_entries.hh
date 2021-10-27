@@ -15,11 +15,12 @@ namespace utils
             int term;
             int client_id;
             int data;
+            int request_id;
         };
 
         LogEntries(std::string file);
 
-        void append_entry(int term, int client_id, int data);
+        void append_entry(int term, int client_id, int data, int request_id);
 
         std::optional<int> last_log_index() const;
         std::optional<int> last_log_term() const;

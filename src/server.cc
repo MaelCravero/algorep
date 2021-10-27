@@ -2,33 +2,12 @@
 
 #include <chrono>
 #include <iostream>
-#include <random>
 #include <thread>
 #include <unistd.h>
 
 #include "repl.hh"
 
 #define LOG(mode) logger_ << utils::Logger::LogType::mode
-
-namespace
-{
-    Server::timestamp now()
-    {
-        return std::chrono::system_clock::now().time_since_epoch();
-    }
-
-    /// get a new timeout between `min` and `max` seconds from now
-    Server::timestamp get_new_timeout(double min, double max)
-    {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_real_distribution<double> dis(min, max);
-
-        int delay = dis(gen) * 1000;
-        return now() + std::chrono::milliseconds(delay);
-    }
-
-} // namespace
 
 Server::Server(rank rank, int nb_server)
     : status_(Status::FOLLOWER)
@@ -77,12 +56,13 @@ void Server::broadcast(const ServerMessage& message, int tag)
 
 void Server::reset_timeout()
 {
-    timeout_ = get_new_timeout(0.5 * speed_mod_, 1 * speed_mod_);
+    timeout_ = utils::get_new_timeout(0.5 * speed_mod_, 1 * speed_mod_);
 }
 
 void Server::reset_heartbeat_timeout()
 {
-    heartbeat_timeout_ = get_new_timeout(0.1 * speed_mod_, 0.15 * speed_mod_);
+    heartbeat_timeout_ =
+        utils::get_new_timeout(0.1 * speed_mod_, 0.15 * speed_mod_);
 }
 
 void Server::heartbeat()
@@ -101,7 +81,7 @@ void Server::update()
 
     if (status_ != Status::LEADER)
     {
-        if (now() > timeout_ && !has_crashed_)
+        if (utils::now() > timeout_ && !has_crashed_)
             return candidate();
 
         follower();
@@ -131,11 +111,14 @@ void Server::handle_client_request()
 
     LOG(INFO) << "received message from client:" << recv_data.source;
 
-    append_entries(term_, recv_data.source, recv_data.entry);
+    append_entries(term_, recv_data.source, recv_data.entry,
+                   recv_data.request_id);
+
     logs_to_be_commited_[log_entries_.last_log_index().value()] = 1;
 
     auto message = init_message(recv_data.entry);
     message.client_id = recv_data.source;
+    message.request_id = recv_data.request_id;
     message.log_index = log_entries_.last_log_index().value();
 
     broadcast(message, MessageTag::APPEND_ENTRIES);
@@ -234,7 +217,7 @@ void Server::leader()
     // heartbeat back/forth
     // if msg: ask confirmation
 
-    if (now() > heartbeat_timeout_ && !has_crashed_)
+    if (utils::now() > heartbeat_timeout_ && !has_crashed_)
         heartbeat();
 
     if (has_crashed_)
@@ -312,7 +295,7 @@ void Server::candidate()
     while (nb_votes <= nb_server_ / 2)
     {
         // on timeout start a new election
-        if (now() > timeout_)
+        if (utils::now() > timeout_)
             return candidate();
 
         if (auto tag = mpi::available_message())
@@ -391,11 +374,11 @@ void Server::vote(int server)
     mpi::send(server, message, MessageTag::VOTE);
 }
 
-void Server::append_entries(int term, int client_id, int data)
+void Server::append_entries(int term, int client_id, int data, int request_id)
 {
     LOG(INFO) << "AppendEntries";
 
-    log_entries_.append_entry(term, client_id, data);
+    log_entries_.append_entry(term, client_id, data, request_id);
 }
 
 void Server::follower()
@@ -440,8 +423,8 @@ void Server::follower()
             leader_ = recv_data.source;
             reset_timeout();
 
-            append_entries(recv_data.term, recv_data.client_id,
-                           recv_data.entry);
+            append_entries(recv_data.term, recv_data.client_id, recv_data.entry,
+                           recv_data.request_id);
 
             mpi::send(leader_, recv_data,
                       MessageTag::ACKNOWLEDGE_APPEND_ENTRIES);
