@@ -3,12 +3,14 @@
 #include <mpi.h>
 
 #include "common.hh"
+#include "utils/time.hh"
 
 class Client
 {
 public:
     struct ClientMessage : public Message
     {
+        int request_id;
         int entry;
     };
 
@@ -23,5 +25,6 @@ private:
     int nb_server_;
     int server_;
 
+    int request_id_;
     bool started_;
 };

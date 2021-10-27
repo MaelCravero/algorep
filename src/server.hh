@@ -1,6 +1,5 @@
 #pragma once
 
-#include <chrono>
 #include <map>
 #include <mpi.h>
 #include <mpi/mpi.hh>
@@ -11,6 +10,7 @@
 #include "common.hh"
 #include "utils/log_entries.hh"
 #include "utils/logger.hh"
+#include "utils/time.hh"
 
 class Server
 {
@@ -36,6 +36,7 @@ public:
         int last_log_term;
 
         int entry;
+        int request_id;
 
         int client_id;
         int log_index;
@@ -43,8 +44,6 @@ public:
         int leader_id;
         int leader_commit;
     };
-
-    using timestamp = std::chrono::duration<double>;
 
     Server(rank rank, int nb_server);
 
@@ -69,7 +68,7 @@ protected:
     void follower();
 
     void vote(int server);
-    void append_entries(int term, int client_id, int data);
+    void append_entries(int term, int client_id, int data, int request_id);
     /// \}
 
 private:
@@ -114,10 +113,10 @@ private:
     int speed_mod_;
 
     /// Timestamp of the timeout
-    timestamp timeout_;
+    utils::timestamp timeout_;
 
     /// Timestamp of the timeout
-    timestamp heartbeat_timeout_;
+    utils::timestamp heartbeat_timeout_;
 
     /// Current term
     int term_;

@@ -10,9 +10,18 @@ namespace utils
         , logger_(file)
     {}
 
-    void LogEntries::append_entry(int term, int client_id, int data)
+    void LogEntries::append_entry(int term, int client_id, int data,
+                                  int request_id)
     {
-        entries_.emplace_back(Entry{term, client_id, data});
+        for (const auto& entry : entries_)
+        {
+            // if entry already in the log do not add it again
+            if (entry.term == term && entry.client_id == client_id
+                && entry.data == data && entry.request_id == request_id)
+                return;
+        }
+
+        entries_.emplace_back(Entry{term, client_id, data, request_id});
     }
 
     std::optional<int> LogEntries::last_log_index() const

@@ -11,30 +11,57 @@ Client::Client(int rank, int nb_server)
     : rank_(rank)
     , nb_server_(nb_server)
     , server_(rank % nb_server + 1)
+    , request_id_(0)
     , started_(false)
 {}
 
 bool Client::send_request()
 {
-    using namespace std::chrono_literals;
-
     ClientMessage message;
     message.entry = rank_;
+    message.request_id = request_id_++;
+
+    utils::timestamp timeout = utils::get_new_timeout(2, 2.6);
+
     mpi::send(server_, message, MessageTag::CLIENT_REQUEST);
 
-    auto recv_data = mpi::recv<Server::ServerMessage>(server_);
+    int count_retry = 0;
 
-    if (recv_data.tag == MessageTag::REJECT)
+    while (count_retry < nb_server_ * 3)
     {
-        server_ = recv_data.leader_id;
-        std::this_thread::sleep_for(500ms);
-        return false;
+        if (utils::now() > timeout)
+        {
+            server_ = server_ % nb_server_ + 1;
+
+            mpi::send(server_, message, MessageTag::CLIENT_REQUEST);
+            timeout = utils::get_new_timeout(2, 2.6);
+
+            count_retry++;
+        }
+
+        if (mpi::available_message(server_))
+        {
+            auto recv_data = mpi::recv<Server::ServerMessage>(server_);
+
+            if (recv_data.tag == MessageTag::REJECT)
+            {
+                server_ = recv_data.leader_id;
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+                mpi::send(server_, message, MessageTag::CLIENT_REQUEST);
+                timeout = utils::get_new_timeout(2, 2.6);
+
+                count_retry++;
+            }
+
+            else
+            {
+                return true;
+            }
+        }
     }
 
-    else
-    {
-        return true;
-    }
+    return false;
 }
 
 bool Client::started()
