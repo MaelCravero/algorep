@@ -3,6 +3,8 @@
 #include <chrono>
 #include <iostream>
 #include <random>
+#include <thread>
+#include <unistd.h>
 
 #include "repl.hh"
 
@@ -43,6 +45,7 @@ Server::Server(rank rank, int nb_server)
     , logger_("log_server" + std::to_string(rank) + ".log")
 {
     reset_timeout();
+    LOG(DEBUG) << "server " << rank_ << "has PID " << getpid();
 }
 
 Server::ServerMessage Server::init_message(int entry)
@@ -118,6 +121,7 @@ void Server::become_leader()
 
 void Server::handle_client_request()
 {
+    LOG(DEBUG) << "recv from client at " << __FILE__ << ":" << __LINE__;
     Client::ClientMessage recv_data = mpi::recv<Client::ClientMessage>();
 
     LOG(INFO) << "received message from client:" << recv_data.source;
@@ -134,10 +138,15 @@ void Server::handle_client_request()
 
 void Server::handle_repl_request()
 {
-    auto message = mpi::recv<Repl::ReplMessage>();
+    LOG(DEBUG) << "recv from repl at " << __FILE__ << ":" << __LINE__;
+    auto message =
+        mpi::recv<Repl::ReplMessage>(MPI_ANY_SOURCE, MessageTag::REPL);
     if (message.order == Repl::Order::PRINT)
     {
+        std::this_thread::sleep_for(std::chrono::milliseconds(30 * rank_));
+
         std::cout << "Server: " << rank_ << "/" << nb_server_ << "\n";
+        std::cout << "   PID: " << getpid() << "\n";
         std::cout << " Crash: " << std::boolalpha << has_crashed_ << "\n";
         std::cout << "Leader: " << leader_ << "\n";
         std::cout << "  Term: " << term_ << "\n";
@@ -146,6 +155,8 @@ void Server::handle_repl_request()
     }
     if (message.order == Repl::Order::CRASH)
         has_crashed_ = true;
+    if (message.order == Repl::Order::RECOVERY)
+        has_crashed_ = false;
 }
 
 void Server::commit_entry(int log_index, int client_id)
@@ -198,9 +209,15 @@ void Server::ignore_messages()
             break;
 
         if (tag.value() == MessageTag::CLIENT_REQUEST)
+        {
+            LOG(DEBUG) << "recv from client at " << __FILE__ << ":" << __LINE__;
             mpi::recv<Client::ClientMessage>();
+        }
         else
+        {
+            LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
             mpi::recv<ServerMessage>();
+        }
     }
 }
 
@@ -228,6 +245,7 @@ void Server::leader()
     if (tag.value() == MessageTag::CLIENT_REQUEST)
         return handle_client_request();
 
+    LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
     auto recv_data = mpi::recv<ServerMessage>();
     if (recv_data.tag == MessageTag::ACKNOWLEDGE_APPEND_ENTRIES)
         handle_ack_append_entry(recv_data);
@@ -299,6 +317,8 @@ void Server::candidate()
 
             if (tag.value() == MessageTag::VOTE)
             {
+                LOG(DEBUG) << "recv from server at " << __FILE__ << ":"
+                           << __LINE__;
                 auto recv_data = mpi::recv<ServerMessage>();
                 LOG(INFO) << "got a vote from " << recv_data.source;
                 nb_votes++;
@@ -306,6 +326,8 @@ void Server::candidate()
 
             else if (tag.value() == MessageTag::HEARTBEAT)
             {
+                LOG(DEBUG) << "recv from server at " << __FILE__ << ":"
+                           << __LINE__;
                 auto recv_data = mpi::recv<ServerMessage>();
 
                 if (recv_data.term >= term_)
@@ -331,6 +353,8 @@ void Server::candidate()
 
             else if (tag.value() == MessageTag::CLIENT_REQUEST)
             {
+                LOG(DEBUG) << "recv from client at " << __FILE__ << ":"
+                           << __LINE__;
                 auto recv_data = mpi::recv<Client::ClientMessage>();
                 auto message = init_message();
                 mpi::send(recv_data.source, message, MessageTag::REJECT);
@@ -338,7 +362,9 @@ void Server::candidate()
 
             else
             {
-                auto recv_data = mpi::recv<Client::ClientMessage>();
+                LOG(DEBUG) << "recv from server at " << __FILE__ << ":"
+                           << __LINE__;
+                auto recv_data = mpi::recv<ServerMessage>();
                 LOG(DEBUG) << "received message from :" << recv_data.source
                            << " with tag " << recv_data.tag;
             }
@@ -373,6 +399,7 @@ void Server::follower()
 
     if (auto tag = mpi::available_message())
     {
+        LOG(DEBUG) << "available tag is " << tag.value();
         if (tag.value() == MessageTag::REPL)
             return handle_repl_request();
 
@@ -381,6 +408,7 @@ void Server::follower()
 
         if (tag.value() == MessageTag::CLIENT_REQUEST)
         {
+            LOG(DEBUG) << "recv from client at " << __FILE__ << ":" << __LINE__;
             auto recv_data = mpi::recv<Client::ClientMessage>();
             LOG(INFO) << "received message from client:" << recv_data.source;
 
@@ -389,6 +417,7 @@ void Server::follower()
             return;
         }
 
+        LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
         auto recv_data = mpi::recv<ServerMessage>();
 
         if (recv_data.tag == MessageTag::REQUEST_VOTE && term_ < recv_data.term)
