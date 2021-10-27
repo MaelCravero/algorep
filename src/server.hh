@@ -91,7 +91,8 @@ private:
 
     void handle_client_request();
     void handle_repl_request();
-    void handle_ack_append_entry(const ServerMessage& recv_data);
+    void handle_accept_append_entry(const ServerMessage& recv_data);
+    void handle_reject_append_entry(const ServerMessage& recv_data);
 
     void commit_entry(int log_index, int client_id);
 

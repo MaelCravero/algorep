@@ -18,8 +18,8 @@ Server::Server(rank rank, int nb_server)
     , timeout_()
     , term_(0)
     , has_crashed_(false)
-    , next_index_(0)
-    , match_index_(0)
+    , next_index_(nb_server + 1)
+    , match_index_(nb_server + 1)
     , log_entries_("entries_server" + std::to_string(rank) + ".log")
     , logs_to_be_commited_()
     , logger_("log_server" + std::to_string(rank) + ".log")
@@ -33,11 +33,9 @@ Server::ServerMessage Server::init_message(int entry)
     ServerMessage message;
 
     message.term = term_;
-    auto log_index = log_entries_.last_log_index();
-    message.last_log_index = log_index ? log_index.value() : -1;
+    message.last_log_index = log_entries_.last_log_index();
 
-    auto log_term = log_entries_.last_log_term();
-    message.last_log_term = log_term ? log_term.value() : -1;
+    message.last_log_term = log_entries_.last_log_term();
 
     message.entry = entry;
 
@@ -111,15 +109,15 @@ void Server::handle_client_request()
 
     LOG(INFO) << "received message from client:" << recv_data.source;
 
+    auto message = init_message(recv_data.entry);
     append_entries(term_, recv_data.source, recv_data.entry,
                    recv_data.request_id);
 
-    logs_to_be_commited_[log_entries_.last_log_index().value()] = 1;
-
-    auto message = init_message(recv_data.entry);
     message.client_id = recv_data.source;
     message.request_id = recv_data.request_id;
-    message.log_index = log_entries_.last_log_index().value();
+    message.log_index = log_entries_.last_log_index();
+
+    logs_to_be_commited_[log_entries_.last_log_index()] = 1;
 
     broadcast(message, MessageTag::APPEND_ENTRIES);
 }
@@ -129,6 +127,7 @@ void Server::handle_repl_request()
     LOG(DEBUG) << "recv from repl at " << __FILE__ << ":" << __LINE__;
     auto message =
         mpi::recv<Repl::ReplMessage>(MPI_ANY_SOURCE, MessageTag::REPL);
+
     if (message.order == Repl::Order::PRINT)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(30 * rank_));
@@ -147,7 +146,12 @@ void Server::handle_repl_request()
     if (message.order == Repl::Order::CRASH)
         has_crashed_ = true;
     if (message.order == Repl::Order::RECOVERY)
+    {
+        LOG(DEBUG) << "recover";
         has_crashed_ = false;
+        status_ = Status::FOLLOWER;
+        reset_timeout();
+    }
 }
 
 void Server::commit_entry(int log_index, int client_id)
@@ -163,15 +167,14 @@ void Server::commit_entry(int log_index, int client_id)
     LOG(INFO) << "Notify client " << client_id << " for request " << log_index;
 }
 
-void Server::handle_ack_append_entry(const ServerMessage& recv_data)
+void Server::handle_accept_append_entry(const ServerMessage& recv_data)
 {
     LOG(INFO) << "received acknowledge for log :" << recv_data.log_index
               << " from server " << recv_data.source;
 
     if (logs_to_be_commited_.contains(recv_data.log_index))
     {
-        auto nb_ack =
-            ++logs_to_be_commited_[log_entries_.last_log_index().value()];
+        auto nb_ack = ++logs_to_be_commited_[log_entries_.last_log_index()];
 
         if (nb_ack > nb_server_ / 2
             && log_entries_.get_commit_index() == recv_data.log_index - 1)
@@ -190,6 +193,17 @@ void Server::handle_ack_append_entry(const ServerMessage& recv_data)
             heartbeat();
         }
     }
+
+    next_index_[recv_data.source]++;
+    match_index_[recv_data.source]++;
+}
+
+void Server::handle_reject_append_entry(const ServerMessage& recv_data)
+{
+    LOG(INFO) << "received reject for log :" << recv_data.log_index
+              << " from server " << recv_data.source;
+
+    next_index_[recv_data.source]--;
 }
 
 void Server::ignore_messages()
@@ -238,8 +252,12 @@ void Server::leader()
 
     LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
     auto recv_data = mpi::recv<ServerMessage>();
-    if (recv_data.tag == MessageTag::ACKNOWLEDGE_APPEND_ENTRIES)
-        handle_ack_append_entry(recv_data);
+
+    if (recv_data.tag == MessageTag::ACCEPT_APPEND_ENTRIES)
+        handle_accept_append_entry(recv_data);
+
+    if (recv_data.tag == MessageTag::REJECT_APPEND_ENTRIES)
+        handle_reject_append_entry(recv_data);
 
     else if (recv_data.tag == MessageTag::HEARTBEAT && recv_data.term > term_)
     {
@@ -411,23 +429,45 @@ void Server::follower()
         LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
         auto recv_data = mpi::recv<ServerMessage>();
 
-        if (recv_data.tag == MessageTag::REQUEST_VOTE && term_ < recv_data.term)
+        if (recv_data.tag == MessageTag::REQUEST_VOTE)
         {
-            vote(recv_data.source);
-
-            update_term(recv_data.term);
+            if (term_ < recv_data.term)
+            {
+                update_term(recv_data.term);
+                if (log_entries_.last_log_index() <= recv_data.last_log_index
+                    && log_entries_.last_log_term() <= recv_data.last_log_term)
+                {
+                    vote(recv_data.source);
+                }
+            }
         }
 
         else if (recv_data.tag == MessageTag::APPEND_ENTRIES)
         {
+            if (recv_data.term < term_
+                || recv_data.last_log_index != log_entries_.last_log_index()
+                || recv_data.last_log_term != log_entries_.last_log_term())
+            {
+                mpi::send(leader_, recv_data,
+                          MessageTag::REJECT_APPEND_ENTRIES);
+                return;
+            }
+
+            // last_log_index == prev_log_index
+            if (log_entries_.last_log_index() > recv_data.last_log_index
+                && recv_data.term
+                    != log_entries_[recv_data.last_log_index + 1].term)
+            {
+                log_entries_.delete_from_index(recv_data.last_log_index + 1);
+            }
+
             leader_ = recv_data.source;
             reset_timeout();
 
             append_entries(recv_data.term, recv_data.client_id, recv_data.entry,
                            recv_data.request_id);
 
-            mpi::send(leader_, recv_data,
-                      MessageTag::ACKNOWLEDGE_APPEND_ENTRIES);
+            mpi::send(leader_, recv_data, MessageTag::ACCEPT_APPEND_ENTRIES);
         }
 
         else if (recv_data.tag == MessageTag::HEARTBEAT)
@@ -438,7 +478,8 @@ void Server::follower()
 
             while (recv_data.leader_commit > log_entries_.get_commit_index())
             {
-                log_entries_.commit_next_entry();
+                if (!log_entries_.commit_next_entry())
+                    break;
                 LOG(INFO) << "commited log number: " << get_log_number();
             }
 

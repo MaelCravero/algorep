@@ -24,20 +24,20 @@ namespace utils
         entries_.emplace_back(Entry{term, client_id, data, request_id});
     }
 
-    std::optional<int> LogEntries::last_log_index() const
+    int LogEntries::last_log_index() const
     {
         int size = entries_.size();
 
         if (size)
             return size - 1;
-        return {};
+        return -1;
     }
 
-    std::optional<int> LogEntries::last_log_term() const
+    int LogEntries::last_log_term() const
     {
         if (entries_.size())
             return entries_.back().term;
-        return {};
+        return -1;
     }
 
     int LogEntries::get_commit_index() const
@@ -45,18 +45,29 @@ namespace utils
         return commit_index_;
     }
 
-    void LogEntries::commit_next_entry()
+    bool LogEntries::commit_next_entry()
     {
+        if (commit_index_ >= last_log_index())
+            return false;
+
         commit_index_++;
 
         const auto entry = entries_[commit_index_];
         LOG(INFO) << "term: " << entry.term << " client_id: " << entry.client_id
                   << " data: " << entry.data;
+
+        return true;
     }
 
     size_t LogEntries::size() const
     {
         return entries_.size();
+    }
+
+    void LogEntries::delete_from_index(int index)
+    {
+        if (index < entries_.size())
+            entries_.resize(index);
     }
 
     LogEntries::Entry& LogEntries::operator[](int i)
