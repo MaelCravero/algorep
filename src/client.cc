@@ -1,24 +1,55 @@
 #include "client.hh"
 
+#include <assert.h>
 #include <chrono>
+#include <iostream>
 #include <thread>
+#include <unistd.h>
 
 #include "mpi/mpi.hh"
 #include "repl.hh"
 #include "server.hh"
 
-Client::Client(int rank, int nb_server)
+namespace
+{
+    Client::command_list init_commands(std::string cmd_file)
+    {
+        Client::command_list res;
+
+        auto input = std::ifstream(cmd_file);
+
+        std::string line;
+        while (input >> line)
+            res.push_back(line);
+
+        return res;
+    }
+} // namespace
+
+Client::Client(int rank, int nb_server, std::string cmd_file)
     : rank_(rank)
     , nb_server_(nb_server)
     , server_(rank % nb_server + 1)
     , request_id_(0)
     , started_(false)
-{}
+    , command_list_(init_commands(cmd_file))
+{
+#if 0
+    std::cout << "client " << rank_ << "has PID " << getpid() << std::endl;
+#endif
+}
+
+bool Client::done() const
+{
+    return request_id_ >= command_list_.size();
+}
 
 bool Client::send_request()
 {
     ClientMessage message;
+
     message.entry = rank_;
+    std::memcpy(message.command, command_list_[request_id_].data(), 64);
     message.request_id = request_id_++;
 
     utils::timestamp timeout = utils::get_new_timeout(2, 2.6);
