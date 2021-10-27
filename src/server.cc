@@ -63,14 +63,6 @@ void Server::reset_heartbeat_timeout()
         utils::get_new_timeout(0.1 * speed_mod_, 0.15 * speed_mod_);
 }
 
-void Server::heartbeat()
-{
-    reset_heartbeat_timeout();
-    auto message = init_message();
-    broadcast(message, MessageTag::HEARTBEAT);
-    LOG(INFO) << "sending heatbeat";
-}
-
 void Server::update()
 {
     if (speed_mod_ > 1)
@@ -102,6 +94,40 @@ void Server::become_leader()
     LOG(INFO) << "become the leader";
 }
 
+void Server::heartbeat()
+{
+    reset_heartbeat_timeout();
+    auto message = init_message();
+
+    for (int i = 1; i <= nb_server_; i++)
+    {
+        if (i == rank_)
+            continue;
+
+        if (next_index_[i] == log_entries_.last_log_index() + 1)
+            mpi::send(i, message, MessageTag::HEARTBEAT);
+
+        else
+        {
+            auto next_entry = log_entries_[next_index_[i]];
+            message.client_id = next_entry.client_id;
+            message.request_id = next_entry.request_id;
+            message.entry = next_entry.data;
+            message.term = term_;
+
+            message.last_log_index = next_index_[i] - 1;
+            message.last_log_term = log_entries_.last_log_index() <= 0
+                ? -1
+                : log_entries_[next_index_[i] - 1].term;
+
+            mpi::send(i, message, MessageTag::APPEND_ENTRIES);
+        }
+    }
+
+    broadcast(message, MessageTag::HEARTBEAT);
+    LOG(INFO) << "sending heatbeat";
+}
+
 void Server::handle_client_request()
 {
     LOG(DEBUG) << "recv from client at " << __FILE__ << ":" << __LINE__;
@@ -109,17 +135,12 @@ void Server::handle_client_request()
 
     LOG(INFO) << "received message from client:" << recv_data.source;
 
-    auto message = init_message(recv_data.entry);
     append_entries(term_, recv_data.source, recv_data.entry,
                    recv_data.request_id);
 
-    message.client_id = recv_data.source;
-    message.request_id = recv_data.request_id;
-    message.log_index = log_entries_.last_log_index();
-
     logs_to_be_commited_[log_entries_.last_log_index()] = 1;
 
-    broadcast(message, MessageTag::APPEND_ENTRIES);
+    heartbeat();
 }
 
 void Server::handle_repl_request()
@@ -448,6 +469,13 @@ void Server::follower()
                 || recv_data.last_log_index != log_entries_.last_log_index()
                 || recv_data.last_log_term != log_entries_.last_log_term())
             {
+                LOG(INFO) << "rejecting append entries term:" << recv_data.term
+                          << "|" << term_
+                          << " log_index : " << recv_data.last_log_index << "|"
+                          << log_entries_.last_log_index()
+                          << " log term:" << recv_data.last_log_term << "|"
+                          << log_entries_.last_log_term();
+
                 mpi::send(leader_, recv_data,
                           MessageTag::REJECT_APPEND_ENTRIES);
                 return;
