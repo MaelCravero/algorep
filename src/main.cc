@@ -15,9 +15,10 @@ void server(rank rank, int nb_server, int nb_client)
 
 void client(rank rank, int nb_server)
 {
-    Client client(rank, nb_server);
+    auto cmd_file = ".commands_" + std::to_string(rank) + ".txt";
+    Client client(rank, nb_server, cmd_file);
 
-    while (true)
+    while (!client.done())
     {
         if (client.started())
         {
