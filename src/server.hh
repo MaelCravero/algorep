@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <map>
 #include <mpi.h>
 #include <mpi/mpi.hh>
 #include <string>
