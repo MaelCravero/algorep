@@ -89,8 +89,8 @@ private:
 
     ServerMessage init_message(int entry = 0);
 
-    void handle_client_request();
-    void handle_repl_request();
+    void handle_client_request(int src, int tag);
+    void handle_repl_request(int src);
     void handle_accept_append_entry(const ServerMessage& recv_data);
     void handle_reject_append_entry(const ServerMessage& recv_data);
 

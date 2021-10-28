@@ -128,10 +128,10 @@ void Server::heartbeat()
     LOG(INFO) << "sending heatbeat";
 }
 
-void Server::handle_client_request()
+void Server::handle_client_request(int src, int tag)
 {
     LOG(DEBUG) << "recv from client at " << __FILE__ << ":" << __LINE__;
-    Client::ClientMessage recv_data = mpi::recv<Client::ClientMessage>();
+    Client::ClientMessage recv_data = mpi::recv<Client::ClientMessage>(src, tag);
 
     LOG(INFO) << "received message from client:" << recv_data.source;
 
@@ -143,11 +143,11 @@ void Server::handle_client_request()
     heartbeat();
 }
 
-void Server::handle_repl_request()
+void Server::handle_repl_request(int src)
 {
     LOG(DEBUG) << "recv from repl at " << __FILE__ << ":" << __LINE__;
     auto message =
-        mpi::recv<Repl::ReplMessage>(MPI_ANY_SOURCE, MessageTag::REPL);
+        mpi::recv<Repl::ReplMessage>(src, MessageTag::REPL);
 
     if (message.order == Repl::Order::PRINT)
     {
@@ -229,21 +229,25 @@ void Server::handle_reject_append_entry(const ServerMessage& recv_data)
 
 void Server::ignore_messages()
 {
-    while (auto tag = mpi::available_message())
+    int flag;
+    mpi::status status;
+    MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
+    while (flag)
     {
-        if (tag.value() == MessageTag::REPL)
+        if (status.MPI_TAG == MessageTag::REPL)
             break;
 
-        if (tag.value() == MessageTag::CLIENT_REQUEST)
+        if (status.MPI_TAG == MessageTag::CLIENT_REQUEST)
         {
             LOG(DEBUG) << "recv from client at " << __FILE__ << ":" << __LINE__;
-            mpi::recv<Client::ClientMessage>();
+            mpi::recv<Client::ClientMessage>(status.MPI_SOURCE, status.MPI_TAG);
         }
         else
         {
             LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
-            mpi::recv<ServerMessage>();
+            mpi::recv<ServerMessage>(status.MPI_SOURCE, status.MPI_TAG);
         }
+        MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
     }
 }
 
@@ -258,21 +262,24 @@ void Server::leader()
     if (has_crashed_)
         ignore_messages();
 
-    auto tag = mpi::available_message();
-    if (!tag)
+    int flag;
+    mpi::status status;
+    MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
+
+    if (!flag)
         return;
 
-    if (tag.value() == MessageTag::REPL)
-        return handle_repl_request();
+    if (status.MPI_TAG == MessageTag::REPL)
+        return handle_repl_request(status.MPI_SOURCE);
 
     if (has_crashed_)
         return;
 
-    if (tag.value() == MessageTag::CLIENT_REQUEST)
-        return handle_client_request();
+    if (status.MPI_TAG == MessageTag::CLIENT_REQUEST)
+        return handle_client_request(status.MPI_SOURCE, status.MPI_TAG);
 
     LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
-    auto recv_data = mpi::recv<ServerMessage>();
+    auto recv_data = mpi::recv<ServerMessage>(status.MPI_SOURCE, status.MPI_TAG);
 
     if (recv_data.tag == MessageTag::ACCEPT_APPEND_ENTRIES)
         handle_accept_append_entry(recv_data);
@@ -336,29 +343,35 @@ void Server::candidate()
         // on timeout start a new election
         if (utils::now() > timeout_)
             return candidate();
+        
+        int flag;
+        mpi::status status;
+        MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
 
-        if (auto tag = mpi::available_message())
+        if (flag)
         {
-            if (tag.value() == MessageTag::REPL)
-                return handle_repl_request();
+            if (status.MPI_TAG == MessageTag::REPL)
+                return handle_repl_request(status.MPI_SOURCE);
 
             if (has_crashed_)
                 return;
 
-            if (tag.value() == MessageTag::VOTE)
+            if (status.MPI_TAG == MessageTag::VOTE)
             {
                 LOG(DEBUG) << "recv from server at " << __FILE__ << ":"
                            << __LINE__;
-                auto recv_data = mpi::recv<ServerMessage>();
+                auto recv_data = mpi::recv<ServerMessage>(status.MPI_SOURCE,
+                status.MPI_TAG);
                 LOG(INFO) << "got a vote from " << recv_data.source;
                 nb_votes++;
             }
 
-            else if (tag.value() == MessageTag::HEARTBEAT)
+            else if (status.MPI_TAG == MessageTag::HEARTBEAT)
             {
                 LOG(DEBUG) << "recv from server at " << __FILE__ << ":"
                            << __LINE__;
-                auto recv_data = mpi::recv<ServerMessage>();
+                auto recv_data = mpi::recv<ServerMessage>(status.MPI_SOURCE,
+                status.MPI_TAG);
 
                 if (recv_data.term >= term_)
                 {
@@ -381,11 +394,13 @@ void Server::candidate()
                 }
             }
 
-            else if (tag.value() == MessageTag::CLIENT_REQUEST)
+            else if (status.MPI_TAG == MessageTag::CLIENT_REQUEST)
             {
                 LOG(DEBUG) << "recv from client at " << __FILE__ << ":"
                            << __LINE__;
-                auto recv_data = mpi::recv<Client::ClientMessage>();
+                auto recv_data =
+                mpi::recv<Client::ClientMessage>(status.MPI_SOURCE,
+                status.MPI_TAG);
                 auto message = init_message();
                 mpi::send(recv_data.source, message, MessageTag::REJECT);
             }
@@ -394,7 +409,8 @@ void Server::candidate()
             {
                 LOG(DEBUG) << "recv from server at " << __FILE__ << ":"
                            << __LINE__;
-                auto recv_data = mpi::recv<ServerMessage>();
+                auto recv_data = mpi::recv<ServerMessage>(status.MPI_SOURCE,
+                status.MPI_TAG);
                 LOG(DEBUG) << "received message from :" << recv_data.source
                            << " with tag " << recv_data.tag;
             }
@@ -427,19 +443,24 @@ void Server::follower()
     if (has_crashed_)
         ignore_messages();
 
-    if (auto tag = mpi::available_message())
+    int flag;
+    mpi::status status;
+    MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
+
+    if (flag)
     {
-        LOG(DEBUG) << "available tag is " << tag.value();
-        if (tag.value() == MessageTag::REPL)
-            return handle_repl_request();
+        LOG(DEBUG) << "available tag is " << status.MPI_TAG; 
+        if (status.MPI_TAG == MessageTag::REPL)
+            return handle_repl_request(status.MPI_SOURCE);
 
         if (has_crashed_)
             return;
 
-        if (tag.value() == MessageTag::CLIENT_REQUEST)
+        if (status.MPI_TAG == MessageTag::CLIENT_REQUEST)
         {
             LOG(DEBUG) << "recv from client at " << __FILE__ << ":" << __LINE__;
-            auto recv_data = mpi::recv<Client::ClientMessage>();
+            auto recv_data = mpi::recv<Client::ClientMessage>(status.MPI_SOURCE,
+            status.MPI_TAG);
             LOG(INFO) << "received message from client:" << recv_data.source;
 
             auto message = init_message();
@@ -448,7 +469,8 @@ void Server::follower()
         }
 
         LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
-        auto recv_data = mpi::recv<ServerMessage>();
+        auto recv_data = mpi::recv<ServerMessage>(status.MPI_SOURCE,
+        status.MPI_TAG);
 
         if (recv_data.tag == MessageTag::REQUEST_VOTE)
         {
