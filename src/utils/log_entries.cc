@@ -16,8 +16,7 @@ namespace utils
         for (const auto& entry : entries_)
         {
             // if entry already in the log do not add it again
-            if (entry.term == term && entry.client_id == client_id
-                && entry.data == data && entry.request_id == request_id)
+            if (entry.client_id == client_id && entry.request_id == request_id)
                 return;
         }
 
