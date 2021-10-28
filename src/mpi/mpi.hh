@@ -40,8 +40,8 @@ namespace mpi
         return message;
     }
 
-    inline std::optional<int> available_message(int src = MPI_ANY_SOURCE,
-                                                int tag = MPI_ANY_TAG)
+    inline std::optional<status> available_message(int src = MPI_ANY_SOURCE,
+                                                   int tag = MPI_ANY_TAG)
     {
         int flag;
         status status;
@@ -49,7 +49,7 @@ namespace mpi
 
         if (!flag)
             return {};
-        return status.MPI_TAG;
+        return {status};
     }
 
 } // namespace mpi
