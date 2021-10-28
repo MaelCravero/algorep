@@ -346,7 +346,7 @@ void Server::update_term()
 
 void Server::update_term(int term)
 {
-    if (term > term_)
+    if (term >= term_)
     {
         term_ = term;
         has_voted_ = false;
@@ -392,6 +392,14 @@ void Server::candidate()
             LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
             auto recv_data =
                 mpi::recv<ServerMessage>(status.MPI_SOURCE, status.MPI_TAG);
+            if (recv_data.last_log_index > log_entries_.last_log_index()
+                || recv_data.last_log_term > log_entries_.last_log_term())
+            {
+                LOG(INFO) << "got a reject vote from " << recv_data.source;
+                reset_timeout();
+
+                return;
+            }
             LOG(INFO) << "got a vote from " << recv_data.source;
             nb_votes++;
         }
@@ -467,11 +475,17 @@ void Server::handle_request_vote(int src, int tag)
     {
         update_term(recv_data.term);
 
-        if (!has_voted_
-            && log_entries_.last_log_index() <= recv_data.last_log_index
+        if (
+            log_entries_.last_log_index() <= recv_data.last_log_index
             && log_entries_.last_log_term() <= recv_data.last_log_term)
         {
             vote(recv_data.source);
+        }
+        else
+        {
+            LOG(INFO) << "rejecting vote for " << src;
+            auto message = init_message();
+            mpi::send(src, message, MessageTag::VOTE);
         }
     }
 }
@@ -481,8 +495,18 @@ void Server::handle_append_entries(int src, int tag)
     LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
     auto recv_data = mpi::recv<ServerMessage>(src, tag);
 
-    if (recv_data.term < term_
-        || recv_data.last_log_index > log_entries_.last_log_index()
+    if (recv_data.term < term_)
+    {
+        LOG(INFO) << "rejecting append entries term:" << recv_data.term << "|"
+                  << term_;
+
+        return mpi::send(leader_, recv_data, MessageTag::REJECT_APPEND_ENTRIES);
+    }
+
+    leader_ = recv_data.source;
+    reset_timeout();
+
+    if (recv_data.last_log_index > log_entries_.last_log_index()
         || recv_data.last_log_term > log_entries_.last_log_term())
     {
         LOG(INFO) << "rejecting append entries term:" << recv_data.term << "|"
@@ -493,9 +517,6 @@ void Server::handle_append_entries(int src, int tag)
 
         return mpi::send(leader_, recv_data, MessageTag::REJECT_APPEND_ENTRIES);
     }
-
-    leader_ = recv_data.source;
-    reset_timeout();
 
     // last_log_index == prev_log_index
     if (log_entries_.last_log_index() > recv_data.last_log_index
