@@ -7,9 +7,9 @@
 
 void server(rank rank, int nb_server, int nb_client)
 {
-    Server server(rank, nb_server);
+    Server server(rank, nb_server, nb_client);
 
-    while (server.get_log_number() != nb_client)
+    while (!server.complete())
         server.update();
 }
 

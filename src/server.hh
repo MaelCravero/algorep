@@ -35,6 +35,8 @@ public:
         int last_log_index;
         int last_log_term;
 
+        int commit_index;
+
         int entry;
         int request_id;
 
@@ -45,12 +47,13 @@ public:
         int leader_commit;
     };
 
-    Server(rank rank, int nb_server);
+    Server(rank rank, int nb_server, int nb_request);
 
     /// Update server, if timeout is reached then start an election
     void update();
 
-    int get_log_number() const;
+    /// Has the system logged all client requests
+    bool complete() const;
 
     /// Accessors
     /// \{
@@ -98,7 +101,7 @@ private:
 
     void ignore_messages();
     void init_next_index();
-    void init_match_index();
+    void init_commit_index();
 
     void reject_client(int src, int tag);
     void handle_request_vote(int src, int tag);
@@ -116,6 +119,9 @@ private:
 
     /// Size of the network
     int nb_server_;
+
+    /// Size of the network
+    int nb_request_;
 
     /// Rank of the leader
     rank leader_;
@@ -139,6 +145,9 @@ private:
 
     /// index of the next log entry to send to that server
     std::vector<int> next_index_;
+
+    /// commit index on each server
+    std::vector<int> commit_index_;
 
     /// Log entries
     utils::LogEntries log_entries_;

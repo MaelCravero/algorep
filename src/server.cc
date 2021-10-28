@@ -9,10 +9,11 @@
 
 #define LOG(mode) logger_ << utils::Logger::LogType::mode
 
-Server::Server(rank rank, int nb_server)
+Server::Server(rank rank, int nb_server, int nb_request)
     : status_(Status::FOLLOWER)
     , rank_(rank)
     , nb_server_(nb_server)
+    , nb_request_(nb_request)
     , leader_(rank)
     , speed_mod_(1)
     , timeout_()
@@ -20,6 +21,7 @@ Server::Server(rank rank, int nb_server)
     , has_crashed_(false)
     , has_voted_(false)
     , next_index_(nb_server + 1)
+    , commit_index_(nb_server + 1)
     , log_entries_("entries_server" + std::to_string(rank) + ".log")
     , logs_to_be_commited_()
     , logger_("log_server" + std::to_string(rank) + ".log")
@@ -35,6 +37,12 @@ void Server::init_next_index()
         next_index_[i] = last_index + 1;
 }
 
+void Server::init_commit_index()
+{
+    for (int i = 1; i <= nb_server_; i++)
+        commit_index_[i] = -1;
+}
+
 Server::ServerMessage Server::init_message(int entry)
 {
     ServerMessage message;
@@ -43,6 +51,8 @@ Server::ServerMessage Server::init_message(int entry)
     message.last_log_index = log_entries_.last_log_index();
 
     message.last_log_term = log_entries_.last_log_term();
+
+    message.commit_index = log_entries_.get_commit_index();
 
     message.entry = entry;
 
@@ -96,15 +106,23 @@ void Server::update()
         leader();
 }
 
-int Server::get_log_number() const
+bool Server::complete() const
 {
-    return log_entries_.get_commit_index() + 1;
+    if (leader_ != rank_)
+        return log_entries_.get_commit_index() == nb_request_ - 1;
+
+    for (int i = 1; i <= nb_server_; i++)
+        if (i != rank_ && commit_index_[i] != nb_request_ - 1)
+            return false;
+
+    return true;
 }
 
 void Server::become_leader()
 {
     heartbeat();
     init_next_index();
+    init_commit_index();
     status_ = Status::LEADER;
     leader_ = rank_;
     LOG(INFO) << "become the leader";
@@ -189,6 +207,13 @@ void Server::handle_repl_request(int src)
                 std::cout << next_index_[i] << " ";
             }
             std::cout << "\n";
+
+            std::cout << "Commit: ";
+            for (int i = 1; i <= nb_server_; i++)
+            {
+                std::cout << commit_index_[i] << " ";
+            }
+            std::cout << "\n";
         }
         std::cout << "  Term: " << term_ << "\n";
         std::cout << "NbLogs: " << log_entries_.get_commit_index() + 1 << "/"
@@ -198,7 +223,7 @@ void Server::handle_repl_request(int src)
         speed_mod_ = message.speed_level;
     if (message.order == Repl::Order::CRASH)
         has_crashed_ = true;
-    if (message.order == Repl::Order::RECOVERY)
+    if (message.order == Repl::Order::RECOVERY && has_crashed_)
     {
         LOG(DEBUG) << "recover";
         has_crashed_ = false;
@@ -226,6 +251,7 @@ void Server::handle_accept_append_entry(const ServerMessage& recv_data)
               << " from server " << recv_data.source;
 
     next_index_[recv_data.source] = recv_data.log_index + 1;
+    commit_index_[recv_data.source] = recv_data.commit_index;
 
     LOG(INFO) << "server :" << recv_data.source
               << " index: " << next_index_[recv_data.source];
@@ -540,8 +566,14 @@ void Server::update_commit_index(int index)
     {
         if (!log_entries_.commit_next_entry())
             break;
-        LOG(INFO) << "commited log number: " << get_log_number();
+        LOG(INFO) << "commited log number: "
+                  << log_entries_.get_commit_index() + 1;
     }
+
+    auto message = init_message();
+    // use commit index as log index to avoid update on logs_to_be_commited_ map
+    message.log_index = log_entries_.get_commit_index();
+    mpi::send(leader_, message, MessageTag::ACCEPT_APPEND_ENTRIES);
 }
 
 void Server::follower()
