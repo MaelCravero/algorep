@@ -18,8 +18,8 @@ Server::Server(rank rank, int nb_server)
     , timeout_()
     , term_(0)
     , has_crashed_(false)
+    , has_voted_(false)
     , next_index_(nb_server + 1)
-    , match_index_(nb_server + 1)
     , log_entries_("entries_server" + std::to_string(rank) + ".log")
     , logs_to_be_commited_()
     , logger_("log_server" + std::to_string(rank) + ".log")
@@ -95,8 +95,8 @@ int Server::get_log_number() const
 
 void Server::become_leader()
 {
-    init_next_index();
     heartbeat();
+    init_next_index();
     status_ = Status::LEADER;
     leader_ = rank_;
     LOG(INFO) << "become the leader";
@@ -157,8 +157,6 @@ void Server::handle_client_request(int src, int tag)
                    recv_data.request_id);
 
     logs_to_be_commited_[log_entries_.last_log_index()] = 1;
-
-    heartbeat();
 }
 
 void Server::handle_repl_request(int src)
@@ -220,7 +218,6 @@ void Server::handle_accept_append_entry(const ServerMessage& recv_data)
               << " from server " << recv_data.source;
 
     next_index_[recv_data.source] = recv_data.log_index + 1;
-    match_index_[recv_data.source]++;
 
     LOG(INFO) << "server :" << recv_data.source
               << " index: " << next_index_[recv_data.source];
@@ -250,8 +247,7 @@ void Server::handle_reject_append_entry(const ServerMessage& recv_data)
     LOG(INFO) << "received reject for log :" << recv_data.log_index
               << " from server " << recv_data.source;
 
-    next_index_[recv_data.source]--;
-    if (next_index_[recv_data.source] < 0)
+    if (next_index_[recv_data.source]-- <= 0)
         next_index_[recv_data.source] = 0;
 }
 
@@ -279,11 +275,16 @@ void Server::ignore_messages()
     }
 }
 
+void Server::reject_client(int src, int tag)
+{
+    LOG(DEBUG) << "recv from client at " << __FILE__ << ":" << __LINE__;
+    auto recv_data = mpi::recv<Client::ClientMessage>(src, tag);
+    auto message = init_message();
+    mpi::send(recv_data.source, message, MessageTag::REJECT);
+}
+
 void Server::leader()
 {
-    // heartbeat back/forth
-    // if msg: ask confirmation
-
     if (utils::now() > heartbeat_timeout_ && !has_crashed_)
         heartbeat();
 
@@ -328,9 +329,6 @@ void Server::leader()
 
         update_term(recv_data.term);
 
-        // auto message = init_message();
-        // mpi::send(recv_data.source, message, MessageTag::ACKNOWLEDGE);
-
         reset_timeout();
     }
 
@@ -348,7 +346,11 @@ void Server::update_term()
 
 void Server::update_term(int term)
 {
-    term_ = term;
+    if (term > term_)
+    {
+        term_ = term;
+        has_voted_ = false;
+    }
 
     LOG(INFO) << "current term: " << term_;
 }
@@ -379,71 +381,57 @@ void Server::candidate()
         mpi::status status;
         MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
 
-        if (flag)
+        if (!flag)
+            continue;
+
+        if (status.MPI_TAG == MessageTag::REPL)
+            return handle_repl_request(status.MPI_SOURCE);
+
+        if (status.MPI_TAG == MessageTag::VOTE)
         {
-            if (status.MPI_TAG == MessageTag::REPL)
-                return handle_repl_request(status.MPI_SOURCE);
+            LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
+            auto recv_data =
+                mpi::recv<ServerMessage>(status.MPI_SOURCE, status.MPI_TAG);
+            LOG(INFO) << "got a vote from " << recv_data.source;
+            nb_votes++;
+        }
 
-            if (has_crashed_)
+        // TODO: handle append_entries tag
+        else if (status.MPI_TAG == MessageTag::HEARTBEAT)
+        {
+            LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
+            auto recv_data =
+                mpi::recv<ServerMessage>(status.MPI_SOURCE, status.MPI_TAG);
+
+            if (recv_data.term >= term_)
+            {
+                LOG(INFO) << "received heartbeat from more legitimate "
+                             "leader or server that won the election: "
+                          << recv_data.source;
+
+                leader_ = recv_data.source;
+                status_ = Status::FOLLOWER;
+
+                update_term(recv_data.term);
+
+                reset_timeout();
+
                 return;
-
-            if (status.MPI_TAG == MessageTag::VOTE)
-            {
-                LOG(DEBUG) << "recv from server at " << __FILE__ << ":"
-                           << __LINE__;
-                auto recv_data =
-                    mpi::recv<ServerMessage>(status.MPI_SOURCE, status.MPI_TAG);
-                LOG(INFO) << "got a vote from " << recv_data.source;
-                nb_votes++;
             }
+        }
 
-            else if (status.MPI_TAG == MessageTag::HEARTBEAT)
-            {
-                LOG(DEBUG) << "recv from server at " << __FILE__ << ":"
-                           << __LINE__;
-                auto recv_data =
-                    mpi::recv<ServerMessage>(status.MPI_SOURCE, status.MPI_TAG);
+        else if (status.MPI_TAG == MessageTag::CLIENT_REQUEST)
+        {
+            reject_client(status.MPI_SOURCE, status.MPI_TAG);
+        }
 
-                if (recv_data.term >= term_)
-                {
-                    LOG(INFO) << "received heartbeat from more legitimate "
-                                 "leader or server that won the election: "
-                              << recv_data.source;
-
-                    leader_ = recv_data.source;
-                    status_ = Status::FOLLOWER;
-
-                    update_term(recv_data.term);
-
-                    // auto message = init_message();
-                    // mpi::send(recv_data.source, message,
-                    //          MessageTag::ACKNOWLEDGE);
-
-                    reset_timeout();
-
-                    return;
-                }
-            }
-
-            else if (status.MPI_TAG == MessageTag::CLIENT_REQUEST)
-            {
-                LOG(DEBUG) << "recv from client at " << __FILE__ << ":"
-                           << __LINE__;
-                auto recv_data = mpi::recv<Client::ClientMessage>(
-                    status.MPI_SOURCE, status.MPI_TAG);
-                auto message = init_message();
-                mpi::send(recv_data.source, message, MessageTag::REJECT);
-            }
-
-            else
-            {
-                LOG(DEBUG) << "recv from server at " << __FILE__ << ":"
-                           << __LINE__;
-                auto recv_data =
-                    mpi::recv<ServerMessage>(status.MPI_SOURCE, status.MPI_TAG);
-                LOG(DEBUG) << "received message from :" << recv_data.source
-                           << " with tag " << recv_data.tag;
-            }
+        else
+        {
+            LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
+            auto recv_data =
+                mpi::recv<ServerMessage>(status.MPI_SOURCE, status.MPI_TAG);
+            LOG(DEBUG) << "received message from :" << recv_data.source
+                       << " with tag " << recv_data.tag;
         }
     }
 
@@ -454,6 +442,8 @@ void Server::vote(int server)
 {
     LOG(INFO) << "voting for " << server;
     reset_timeout();
+
+    has_voted_ = true;
 
     auto message = init_message();
     mpi::send(server, message, MessageTag::VOTE);
@@ -466,6 +456,75 @@ void Server::append_entries(int term, int client_id, int data, int request_id)
               << ", entry: " << data << ", request_id " << request_id;
 
     log_entries_.append_entry(term, client_id, data, request_id);
+}
+
+void Server::handle_request_vote(int src, int tag)
+{
+    LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
+    auto recv_data = mpi::recv<ServerMessage>(src, tag);
+
+    if (term_ <= recv_data.term)
+    {
+        update_term(recv_data.term);
+
+        if (!has_voted_
+            && log_entries_.last_log_index() <= recv_data.last_log_index
+            && log_entries_.last_log_term() <= recv_data.last_log_term)
+        {
+            vote(recv_data.source);
+        }
+    }
+}
+
+void Server::handle_append_entries(int src, int tag)
+{
+    LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
+    auto recv_data = mpi::recv<ServerMessage>(src, tag);
+
+    if (recv_data.term < term_
+        || recv_data.last_log_index > log_entries_.last_log_index()
+        || recv_data.last_log_term > log_entries_.last_log_term())
+    {
+        LOG(INFO) << "rejecting append entries term:" << recv_data.term << "|"
+                  << term_ << " last log_index : " << recv_data.last_log_index
+                  << "|" << log_entries_.last_log_index()
+                  << " log term:" << recv_data.last_log_term << "|"
+                  << log_entries_.last_log_term();
+
+        return mpi::send(leader_, recv_data, MessageTag::REJECT_APPEND_ENTRIES);
+    }
+
+    leader_ = recv_data.source;
+    reset_timeout();
+
+    // last_log_index == prev_log_index
+    if (log_entries_.last_log_index() > recv_data.last_log_index
+        && recv_data.term != log_entries_[recv_data.last_log_index + 1].term)
+    {
+        log_entries_.delete_from_index(recv_data.last_log_index + 1);
+    }
+
+    append_entries(recv_data.term, recv_data.client_id, recv_data.entry,
+                   recv_data.request_id);
+
+    auto message = init_message();
+    message.log_index = recv_data.last_log_index + 1;
+    message.client_id = recv_data.client_id;
+
+    update_commit_index(recv_data.leader_commit);
+    update_term(recv_data.term);
+
+    mpi::send(leader_, message, MessageTag::ACCEPT_APPEND_ENTRIES);
+}
+
+void Server::update_commit_index(int index)
+{
+    while (index > log_entries_.get_commit_index())
+    {
+        if (!log_entries_.commit_next_entry())
+            break;
+        LOG(INFO) << "commited log number: " << get_log_number();
+    }
 }
 
 void Server::follower()
@@ -490,105 +549,28 @@ void Server::follower()
         return;
 
     if (status.MPI_TAG == MessageTag::CLIENT_REQUEST)
+        return reject_client(status.MPI_SOURCE, status.MPI_TAG);
+
+    if (status.MPI_TAG == MessageTag::REQUEST_VOTE)
+        return handle_request_vote(status.MPI_SOURCE, status.MPI_TAG);
+
+    if (status.MPI_TAG == MessageTag::APPEND_ENTRIES)
+        return handle_append_entries(status.MPI_SOURCE, status.MPI_TAG);
+
+    if (status.MPI_TAG == MessageTag::HEARTBEAT)
     {
-        LOG(DEBUG) << "recv from client at " << __FILE__ << ":" << __LINE__;
+        LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
         auto recv_data =
-            mpi::recv<Client::ClientMessage>(status.MPI_SOURCE, status.MPI_TAG);
-        LOG(INFO) << "received message from client:" << recv_data.source;
+            mpi::recv<ServerMessage>(status.MPI_SOURCE, status.MPI_TAG);
 
-        auto message = init_message();
-        mpi::send(recv_data.source, message, MessageTag::REJECT);
-        return;
-    }
-
-    LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
-    auto recv_data =
-        mpi::recv<ServerMessage>(status.MPI_SOURCE, status.MPI_TAG);
-
-    if (recv_data.tag == MessageTag::REQUEST_VOTE)
-    {
-        if (term_ < recv_data.term)
-        {
-            update_term(recv_data.term);
-
-            // TODO: add bool has_voted_
-            if (log_entries_.last_log_index() <= recv_data.last_log_index
-                && log_entries_.last_log_term() <= recv_data.last_log_term)
-            {
-                vote(recv_data.source);
-            }
-        }
-    }
-
-    else if (recv_data.tag == MessageTag::APPEND_ENTRIES)
-    {
-        leader_ = recv_data.source;
-        reset_timeout();
-
-        if (recv_data.term < term_)
-        {
-            mpi::send(leader_, recv_data, MessageTag::REJECT_APPEND_ENTRIES);
-            return;
-        }
-        if (recv_data.last_log_index > log_entries_.last_log_index()
-            || recv_data.last_log_term > log_entries_.last_log_term())
-        {
-            LOG(INFO) << "rejecting append entries term:" << recv_data.term
-                      << "|" << term_
-                      << " last log_index : " << recv_data.last_log_index << "|"
-                      << log_entries_.last_log_index()
-                      << " log term:" << recv_data.last_log_term << "|"
-                      << log_entries_.last_log_term();
-
-            mpi::send(leader_, recv_data, MessageTag::REJECT_APPEND_ENTRIES);
-            return;
-        }
-
-        // last_log_index == prev_log_index
-        if (log_entries_.last_log_index() > recv_data.last_log_index
-            && recv_data.term
-                != log_entries_[recv_data.last_log_index + 1].term)
-        {
-            log_entries_.delete_from_index(recv_data.last_log_index + 1);
-        }
-
-        append_entries(recv_data.term, recv_data.client_id, recv_data.entry,
-                       recv_data.request_id);
-
-        auto message = init_message();
-        message.log_index = recv_data.last_log_index + 1;
-        message.client_id = recv_data.client_id;
-
-        while (recv_data.leader_commit > log_entries_.get_commit_index())
-        {
-            if (!log_entries_.commit_next_entry())
-                break;
-            LOG(INFO) << "commited log number: " << get_log_number();
-        }
-
-        if (term_ < recv_data.term)
-            update_term(recv_data.term);
-
-        mpi::send(leader_, message, MessageTag::ACCEPT_APPEND_ENTRIES);
-    }
-
-    else if (recv_data.tag == MessageTag::HEARTBEAT)
-    {
         LOG(INFO) << "received heartbeat from " << recv_data.source;
-
         leader_ = recv_data.source;
 
-        while (recv_data.leader_commit > log_entries_.get_commit_index())
-        {
-            if (!log_entries_.commit_next_entry())
-                break;
-            LOG(INFO) << "commited log number: " << get_log_number();
-        }
+        update_commit_index(recv_data.leader_commit);
 
         if (term_ < recv_data.term)
             update_term(recv_data.term);
 
-        // auto message = init_message();
         if (recv_data.last_log_index > log_entries_.last_log_index())
             mpi::send(recv_data.source, recv_data,
                       MessageTag::REJECT_APPEND_ENTRIES);
@@ -598,6 +580,10 @@ void Server::follower()
 
     else
     {
+        LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
+        auto recv_data =
+            mpi::recv<ServerMessage>(status.MPI_SOURCE, status.MPI_TAG);
+
         LOG(DEBUG) << "received message from :" << recv_data.source
                    << " with tag " << recv_data.tag;
     }
