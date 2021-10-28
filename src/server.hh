@@ -98,6 +98,14 @@ private:
 
     void ignore_messages();
     void init_next_index();
+    void init_match_index();
+
+    void reject_client(int src, int tag);
+    void handle_request_vote(int src, int tag);
+
+    void handle_append_entries(int src, int tag);
+
+    void update_commit_index(int index);
 
 private:
     /// Status of the server
@@ -126,11 +134,11 @@ private:
     /// Crash status
     bool has_crashed_;
 
+    /// Has voted
+    bool has_voted_;
+
     /// index of the next log entry to send to that server
     std::vector<int> next_index_;
-
-    /// index of highest log entry known to be replicated on server
-    std::vector<int> match_index_;
 
     /// Log entries
     utils::LogEntries log_entries_;
