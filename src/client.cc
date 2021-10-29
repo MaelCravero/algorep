@@ -8,6 +8,7 @@
 
 #include "mpi/mpi.hh"
 #include "repl.hh"
+#include "rpc/rpc.hh"
 #include "server.hh"
 
 namespace
@@ -52,7 +53,7 @@ bool Client::send_request()
     std::memcpy(message.command, command_list_[request_id_].data(), 64);
     message.request_id = request_id_++;
 
-    utils::timestamp timeout = utils::get_new_timeout(2, 2.6);
+    utils::Timeout timeout(2, 2.6);
 
     mpi::send(server_, message, MessageTag::CLIENT_REQUEST);
 
@@ -60,12 +61,12 @@ bool Client::send_request()
 
     while (count_retry < nb_server_ * 3)
     {
-        if (utils::now() > timeout)
+        if (timeout)
         {
             server_ = server_ % nb_server_ + 1;
 
             mpi::send(server_, message, MessageTag::CLIENT_REQUEST);
-            timeout = utils::get_new_timeout(2, 2.6);
+            timeout.reset();
 
             count_retry++;
         }
@@ -80,7 +81,7 @@ bool Client::send_request()
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
                 mpi::send(server_, message, MessageTag::CLIENT_REQUEST);
-                timeout = utils::get_new_timeout(2, 2.6);
+                timeout.reset();
 
                 count_retry++;
             }
