@@ -22,4 +22,34 @@ namespace utils
         return now() + std::chrono::milliseconds(delay);
     }
 
+    class Timeout
+    {
+    public:
+        Timeout(double lower_bound, double upper_bound)
+            : lower_bound(lower_bound)
+            , upper_bound(upper_bound)
+            , speed_mod(1)
+            , timeout_()
+        {
+            reset();
+        }
+
+        inline void reset()
+        {
+            timeout_ = utils::get_new_timeout(lower_bound * speed_mod,
+                                              upper_bound * speed_mod);
+        }
+        inline operator bool()
+        {
+            return now() > timeout_;
+        }
+
+        double lower_bound;
+        double upper_bound;
+        int speed_mod;
+
+    private:
+        timestamp timeout_;
+    };
+
 } // namespace utils

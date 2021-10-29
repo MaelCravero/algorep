@@ -79,8 +79,6 @@ private:
     void request_vote();
 
     void heartbeat();
-    void reset_timeout();
-    void reset_heartbeat_timeout();
 
     void become_leader();
 
@@ -126,13 +124,14 @@ private:
     /// Rank of the leader
     rank leader_;
 
+    /// Speed slow modifier
     int speed_mod_;
 
     /// Timestamp of the timeout
-    utils::timestamp timeout_;
+    utils::Timeout timeout_;
 
     /// Timestamp of the timeout
-    utils::timestamp heartbeat_timeout_;
+    utils::Timeout heartbeat_timeout_;
 
     /// Current term
     int term_;
