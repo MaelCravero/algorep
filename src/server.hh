@@ -49,64 +49,67 @@ public:
 
     Server(rank rank, int nb_server, int nb_request);
 
+    /// Main functions
+    /// \{
     /// Update server, if timeout is reached then start an election
     void update();
 
     /// Has the system logged all client requests
     bool complete() const;
-
-    /// Accessors
-    /// \{
-    rank leader_get() const
-    {
-        return leader_;
-    }
     /// \}
 
-protected:
+private:
     /// Process round depending on status
     /// \{
     void leader();
     void candidate();
     void follower();
-
-    void vote(int server);
-    void append_entries(int term, int client_id, int data, int request_id);
     /// \}
 
-private:
-    void start_election();
-    void request_vote();
-
+    /// Leader
+    /// \{
     void heartbeat();
-
-    void become_leader();
-
-    void update_term();
-    void update_term(int term);
-
-    // Send to all other servers
-    void broadcast(const ServerMessage& message, int tag);
-
-    ServerMessage init_message(int entry = 0);
-
-    void handle_client_request(int src, int tag);
-    void handle_repl_request(int src);
-    void handle_accept_append_entry(const ServerMessage& recv_data);
-    void handle_reject_append_entry(const ServerMessage& recv_data);
-
-    void commit_entry(int log_index, int client_id);
-
-    void ignore_messages();
     void init_next_index();
     void init_commit_index();
+    // Add entry to commit log
+    void commit_entry(int log_index, int client_id);
+    /// \}
 
+    /// Follower
+    /// \{
     void reject_client(int src, int tag);
-    void handle_request_vote(int src, int tag);
-
-    void handle_append_entries(int src, int tag);
-
     void update_commit_index(int index);
+    /// \}
+
+    /// Elections
+    /// \{
+    void vote(int server);
+    // void start_election();
+    // void request_vote();
+    void become_leader();
+    /// \}
+
+    /// Utilities
+    /// \{
+    void update_term();
+    void update_term(int term);
+    void append_entries(int term, int client_id, int data, int request_id);
+    ServerMessage init_message(int entry = 0);
+    // Send to all other servers
+    void broadcast(const ServerMessage& message, int tag);
+    // Ignore messages if crashed
+    void ignore_messages();
+    /// \}
+
+    /// Handlers
+    /// \{
+    void handle_accept_append_entry(const ServerMessage& recv_data);
+    void handle_reject_append_entry(const ServerMessage& recv_data);
+    void handle_append_entries(int src, int tag);
+    void handle_client_request(int src, int tag);
+    void handle_request_vote(int src, int tag);
+    void handle_repl_request(int src);
+    /// \}
 
 private:
     /// Status of the server
