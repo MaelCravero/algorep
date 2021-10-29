@@ -21,10 +21,7 @@ void client(rank rank, int nb_server)
     while (!client.done())
     {
         if (client.started())
-        {
-            if (client.send_request())
-                return;
-        }
+            client.send_request();
         else
             client.recv_order();
     }

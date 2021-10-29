@@ -48,6 +48,7 @@ bool Client::done() const
 bool Client::send_request()
 {
     rpc::ClientRequest message{rank_, request_id_, command_list_[request_id_]};
+    request_id_++;
 
     utils::Timeout timeout(2, 2.6);
 

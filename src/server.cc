@@ -526,7 +526,8 @@ void Server::handle_accept_append_entry(
         if (nb_ack > nb_server_ / 2
             && log_entries_.get_commit_index() == recv_data.log_index - 1)
         {
-            commit_entry(recv_data.log_index, recv_data.source);
+            commit_entry(recv_data.log_index,
+                         log_entries_[recv_data.log_index].data.source);
 
             int i = recv_data.log_index + 1;
             while (logs_to_be_commited_.contains(i)
