@@ -35,23 +35,20 @@ Client::Client(int rank, int nb_server, std::string cmd_file)
     , started_(false)
     , command_list_(init_commands(cmd_file))
 {
-#if 0
+#ifdef _DEBUG
     std::cout << "client " << rank_ << "has PID " << getpid() << std::endl;
 #endif
 }
 
 bool Client::done() const
 {
+    return request_id_ > 0; // TODO implement command lists properly
     return request_id_ >= command_list_.size();
 }
 
 bool Client::send_request()
 {
-    ClientMessage message;
-
-    message.entry = rank_;
-    std::memcpy(message.command, command_list_[request_id_].data(), 64);
-    message.request_id = request_id_++;
+    rpc::ClientRequest message{rank_, request_id_, command_list_[request_id_]};
 
     utils::Timeout timeout(2, 2.6);
 
@@ -73,11 +70,11 @@ bool Client::send_request()
 
         if (mpi::available_message(server_))
         {
-            auto recv_data = mpi::recv<Server::ServerMessage>(server_);
+            auto recv_data = mpi::recv<rpc::ClientRequestResponse>(server_);
 
-            if (recv_data.tag == MessageTag::REJECT)
+            if (!recv_data.value)
             {
-                server_ = recv_data.leader_id;
+                server_ = recv_data.leader;
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
                 mpi::send(server_, message, MessageTag::CLIENT_REQUEST);
@@ -108,7 +105,7 @@ bool Client::recv_order()
     if (!tag)
         return false;
 
-    mpi::recv<Repl::ReplMessage>();
+    mpi::recv<rpc::Repl>();
 
     started_ = true;
     return true;
