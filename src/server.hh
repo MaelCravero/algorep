@@ -28,24 +28,24 @@ public:
         FAILURE,
     };
 
-    struct ServerMessage : public Message
-    {
-        int term;
+    // struct ServerMessage : public Message
+    // {
+    //     int term;
 
-        int last_log_index;
-        int last_log_term;
+    //     int last_log_index;
+    //     int last_log_term;
 
-        int commit_index;
+    //     int commit_index;
 
-        int entry;
-        int request_id;
+    //     int entry;
+    //     int request_id;
 
-        int client_id;
-        int log_index;
+    //     int client_id;
+    //     int log_index;
 
-        int leader_id;
-        int leader_commit;
-    };
+    //     int leader_id;
+    //     int leader_commit;
+    // };
 
     Server(rank rank, int nb_server, int nb_request);
 
@@ -84,8 +84,6 @@ private:
     /// Elections
     /// \{
     void vote(int server);
-    // void start_election();
-    // void request_vote();
     void become_leader();
     /// \}
 
@@ -93,18 +91,20 @@ private:
     /// \{
     void update_term();
     void update_term(int term);
-    void append_entries(int term, int client_id, int data, int request_id);
-    ServerMessage init_message(int entry = 0);
+    void append_entries(int term, rpc::ClientRequest data);
+    // ServerMessage init_message(int entry = 0);
     // Send to all other servers
-    void broadcast(const ServerMessage& message, int tag);
+    void broadcast(const rpc::RequestVote& message, int tag);
     // Ignore messages if crashed
     void ignore_messages();
     /// \}
 
     /// Handlers
     /// \{
-    void handle_accept_append_entry(const ServerMessage& recv_data);
-    void handle_reject_append_entry(const ServerMessage& recv_data);
+    void
+    handle_accept_append_entry(const rpc::AppendEntriesResponse& recv_data);
+    void
+    handle_reject_append_entry(const rpc::AppendEntriesResponse& recv_data);
     void handle_append_entries(int src, int tag);
     void handle_client_request(int src, int tag);
     void handle_request_vote(int src, int tag);

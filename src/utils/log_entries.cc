@@ -1,5 +1,7 @@
 #include "utils/log_entries.hh"
 
+#include <iostream>
+
 #define LOG(mode) logger_ << Logger::LogType::mode
 
 namespace utils
@@ -10,17 +12,16 @@ namespace utils
         , logger_(file)
     {}
 
-    void LogEntries::append_entry(int term, int client_id, int data,
-                                  int request_id)
+    void LogEntries::append_entry(int term, rpc::ClientRequest data)
     {
         for (const auto& entry : entries_)
         {
             // if entry already in the log do not add it again
-            if (entry.client_id == client_id && entry.request_id == request_id)
+            if (entry.data == data)
                 return;
         }
 
-        entries_.emplace_back(Entry{term, client_id, data, request_id});
+        entries_.emplace_back(Entry{term, data});
     }
 
     int LogEntries::last_log_index() const
@@ -52,8 +53,10 @@ namespace utils
         commit_index_++;
 
         const auto entry = entries_[commit_index_];
-        LOG(INFO) << "term: " << entry.term << " client_id: " << entry.client_id
-                  << " data: " << entry.data;
+        LOG(INFO) << ", term: " << entry.term
+                  << ", client: " << entry.data.source
+                  << ", command: " << entry.data.command << ", id "
+                  << entry.data.id;
 
         return true;
     }

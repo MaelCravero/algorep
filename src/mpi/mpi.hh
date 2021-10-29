@@ -1,11 +1,13 @@
 #pragma once
 
 #include <cstring>
+#include <iostream>
 #include <mpi.h>
 #include <optional>
 #include <string>
 
 #include "common.hh"
+#include "rpc/rpc.hh"
 
 namespace mpi
 {
@@ -20,7 +22,6 @@ namespace mpi
 
         MPI_Bsend(buffer, sizeof(M), MPI_CHAR, dst, tag, MPI_COMM_WORLD);
     }
-
     template <typename M>
     inline M recv(int src = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG)
     {
@@ -33,9 +34,6 @@ namespace mpi
         // Convert the char* buffer back to Message type and add source and tag
         // info
         M message = *reinterpret_cast<M*>(buffer);
-
-        message.source = status.MPI_SOURCE;
-        message.tag = status.MPI_TAG;
 
         return message;
     }

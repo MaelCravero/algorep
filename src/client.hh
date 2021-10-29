@@ -10,14 +10,12 @@
 class Client
 {
 public:
-    struct ClientMessage : public Message
-    {
-        using command_t = char[64];
-
-        int request_id;
-        int entry;
-        command_t command;
-    };
+    // struct ClientMessage : public Message
+    // {
+    //     int request_id;
+    //     int entry;
+    //     rpc::command_t command;
+    // };
 
     using command_list = std::vector<std::string>;
 

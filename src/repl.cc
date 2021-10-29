@@ -68,9 +68,7 @@ void Repl::execute(Command command)
     std::cout << "sending message " << static_cast<char>(command.order) << " "
               << command.target << " " << command.speed_level << "\n";
 
-    ReplMessage message;
-    message.order = command.order;
-    message.speed_level = command.speed_level;
+    rpc::Repl message{command.order, command.speed_level};
 
     // TODO: check if target is valid
 
