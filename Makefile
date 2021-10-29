@@ -31,6 +31,9 @@ run: $(BIN)
 $(BIN): $(OBJ)
 	$(CXX) -o $@ $^
 
+debug: CPPFLAGS += -D_DEBUG
+debug: clean run
+
 gen_commands:
 	./gen_cmd.sh $(NSERVER) $(NCLIENT) $(CMD_FILE) $(NCMD)
 

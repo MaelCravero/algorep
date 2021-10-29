@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "rpc/rpc.hh"
 #include "utils/logger.hh"
 
 namespace utils
@@ -12,14 +13,12 @@ namespace utils
         struct Entry
         {
             int term;
-            int client_id;
-            int data;
-            int request_id;
+            rpc::ClientRequest data;
         };
 
         LogEntries(std::string file);
 
-        void append_entry(int term, int client_id, int data, int request_id);
+        void append_entry(int term, rpc::ClientRequest data);
 
         int last_log_index() const;
         int last_log_term() const;
