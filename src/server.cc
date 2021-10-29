@@ -1,8 +1,6 @@
 #include "server.hh"
 
-#include <chrono>
 #include <iostream>
-#include <thread>
 #include <unistd.h>
 
 #include "repl.hh"
@@ -49,8 +47,7 @@ void Server::update()
         return ignore_messages();
 
     if (speed_mod_ > 1)
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(20 * (speed_mod_ / 3)));
+        utils::sleep_for_ms(20 * (speed_mod_ / 3));
 
     if (status_ != Status::LEADER)
     {
@@ -59,7 +56,6 @@ void Server::update()
 
         follower();
     }
-
     else
         leader();
 }
@@ -611,7 +607,7 @@ void Server::handle_repl_request(int src)
 
     if (message.order == Repl::Order::PRINT)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(30 * rank_));
+        utils::sleep_for_ms(30 * rank_);
 
         std::cout << "Server: " << rank_ << "/" << nb_server_ << "\n";
         std::cout << "   PID: " << getpid() << "\n";

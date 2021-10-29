@@ -1,6 +1,7 @@
 #pragma once
 #include <chrono>
 #include <random>
+#include <thread>
 
 namespace utils
 {
@@ -20,6 +21,11 @@ namespace utils
 
         int delay = dis(gen) * 1000;
         return now() + std::chrono::milliseconds(delay);
+    }
+
+    inline void sleep_for_ms(unsigned ms)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(ms));
     }
 
     class Timeout
