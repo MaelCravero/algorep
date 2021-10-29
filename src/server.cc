@@ -16,7 +16,8 @@ Server::Server(rank rank, int nb_server, int nb_request)
     , nb_request_(nb_request)
     , leader_(rank)
     , speed_mod_(1)
-    , timeout_()
+    , timeout_(0.5, 1)
+    , heartbeat_timeout_(0.1, 0.15)
     , term_(0)
     , has_crashed_(false)
     , has_voted_(false)
@@ -26,7 +27,6 @@ Server::Server(rank rank, int nb_server, int nb_request)
     , logs_to_be_commited_()
     , logger_("log_server" + std::to_string(rank) + ".log")
 {
-    reset_timeout();
     LOG(DEBUG) << "server " << rank_ << "has PID " << getpid();
 }
 
@@ -69,17 +69,6 @@ void Server::broadcast(const ServerMessage& message, int tag)
             mpi::send(i, message, tag);
 }
 
-void Server::reset_timeout()
-{
-    timeout_ = utils::get_new_timeout(0.5 * speed_mod_, 1 * speed_mod_);
-}
-
-void Server::reset_heartbeat_timeout()
-{
-    heartbeat_timeout_ =
-        utils::get_new_timeout(0.1 * speed_mod_, 0.15 * speed_mod_);
-}
-
 void Server::update()
 {
     auto status = mpi::available_message();
@@ -96,7 +85,7 @@ void Server::update()
 
     if (status_ != Status::LEADER)
     {
-        if (utils::now() > timeout_)
+        if (timeout_)
             return candidate();
 
         follower();
@@ -130,7 +119,7 @@ void Server::become_leader()
 
 void Server::heartbeat()
 {
-    reset_heartbeat_timeout();
+    heartbeat_timeout_.reset();
     auto message = init_message();
 
     for (int i = 1; i <= nb_server_; i++)
@@ -228,8 +217,11 @@ void Server::handle_repl_request(int src)
         LOG(DEBUG) << "recover";
         has_crashed_ = false;
         status_ = Status::FOLLOWER;
-        reset_timeout();
+        timeout_.reset();
     }
+
+    timeout_.speed_mod = speed_mod_;
+    heartbeat_timeout_.speed_mod = speed_mod_;
 }
 
 void Server::commit_entry(int log_index, int client_id)
@@ -316,7 +308,7 @@ void Server::reject_client(int src, int tag)
 
 void Server::leader()
 {
-    if (utils::now() > heartbeat_timeout_)
+    if (heartbeat_timeout_)
         return heartbeat();
 
     auto status = mpi::available_message();
@@ -352,7 +344,7 @@ void Server::leader()
 
         update_term(recv_data.term);
 
-        reset_timeout();
+        timeout_.reset();
     }
 
     else
@@ -380,7 +372,7 @@ void Server::update_term(int term)
 
 void Server::candidate()
 {
-    reset_timeout();
+    timeout_.reset();
     update_term();
 
     LOG(INFO) << "candidate";
@@ -397,7 +389,7 @@ void Server::candidate()
     while (nb_votes <= nb_server_ / 2)
     {
         // on timeout start a new election
-        if (utils::now() > timeout_)
+        if (timeout_)
             return candidate();
 
         auto status = mpi::available_message();
@@ -419,7 +411,7 @@ void Server::candidate()
                 || recv_data.last_log_term > log_entries_.last_log_term())
             {
                 LOG(INFO) << "got a reject vote from " << recv_data.source;
-                reset_timeout();
+                timeout_.reset();
 
                 return;
             }
@@ -445,7 +437,7 @@ void Server::candidate()
 
                 update_term(recv_data.term);
 
-                reset_timeout();
+                timeout_.reset();
 
                 return;
             }
@@ -472,7 +464,7 @@ void Server::candidate()
 void Server::vote(int server)
 {
     LOG(INFO) << "voting for " << server;
-    reset_timeout();
+    timeout_.reset();
 
     has_voted_ = true;
 
@@ -526,7 +518,7 @@ void Server::handle_append_entries(int src, int tag)
     }
 
     leader_ = recv_data.source;
-    reset_timeout();
+    timeout_.reset();
 
     if (recv_data.last_log_index > log_entries_.last_log_index()
         || recv_data.last_log_term > log_entries_.last_log_term())
@@ -616,7 +608,7 @@ void Server::follower()
             mpi::send(recv_data.source, recv_data,
                       MessageTag::REJECT_APPEND_ENTRIES);
 
-        reset_timeout();
+        timeout_.reset();
     }
 
     else
