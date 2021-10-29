@@ -75,7 +75,12 @@ void Repl::execute(Command command)
     // TODO: check if target is valid
 
     if (command.target)
+    {
+        if (command.order == Order::BEGIN && command.target <= nb_client_)
+            command.target += nb_server_;
+
         mpi::send(command.target, message, MessageTag::REPL);
+    }
 
     else
     {
