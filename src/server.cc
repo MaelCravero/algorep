@@ -94,8 +94,7 @@ void Server::leader()
     if (status->MPI_TAG == MessageTag::CLIENT_REQUEST)
         return handle_client_request(status->MPI_SOURCE, status->MPI_TAG);
 
-    if (status->MPI_TAG == MessageTag::ACCEPT_APPEND_ENTRIES
-        || status->MPI_TAG == MessageTag::REJECT_APPEND_ENTRIES)
+    if (status->MPI_TAG == MessageTag::APPEND_ENTRIES_RESPONSE)
     {
         LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
 
@@ -337,7 +336,7 @@ void Server::update_commit_index(int index)
     rpc::AppendEntriesResponse message{rank_, true,
                                        log_entries_.get_commit_index(),
                                        log_entries_.get_commit_index()};
-    mpi::send(leader_, message, MessageTag::ACCEPT_APPEND_ENTRIES);
+    mpi::send(leader_, message, MessageTag::APPEND_ENTRIES_RESPONSE);
 }
 
 //------------------------------------------------------------------//
@@ -483,7 +482,7 @@ void Server::handle_append_entries(int src, int tag)
         LOG(INFO) << "rejecting append entries term:" << recv_data.term << "|"
                   << term_;
 
-        return mpi::send(leader_, message, MessageTag::REJECT_APPEND_ENTRIES);
+        return mpi::send(leader_, message, MessageTag::APPEND_ENTRIES_RESPONSE);
     }
 
     leader_ = recv_data.source;
@@ -499,7 +498,7 @@ void Server::handle_append_entries(int src, int tag)
                   << " log term:" << recv_data.prev_log_term << "|"
                   << log_entries_.last_log_term();
 
-        return mpi::send(leader_, message, MessageTag::REJECT_APPEND_ENTRIES);
+        return mpi::send(leader_, message, MessageTag::APPEND_ENTRIES_RESPONSE);
     }
 
     // last_log_index == prev_log_index
