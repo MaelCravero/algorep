@@ -4,24 +4,12 @@
 #include <string>
 
 #include "common.hh"
+#include "rpc/rpc.hh"
 
 class Repl
 {
 public:
-    enum class Order : char
-    {
-        SPEED = 's',
-        CRASH = 'c',
-        BEGIN = 'b',
-        RECOVERY = 'r',
-        PRINT = 'p',
-    };
-
-    struct ReplMessage : public Message
-    {
-        Order order;
-        int speed_level; // optional argument for some orders
-    };
+    using Order = rpc::Repl::Order;
 
 private:
     struct Command

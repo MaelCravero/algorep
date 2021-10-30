@@ -640,7 +640,7 @@ void Server::handle_request_vote(int src, int tag)
 void Server::handle_repl_request(int src)
 {
     LOG(DEBUG) << "recv from repl at " << __FILE__ << ":" << __LINE__;
-    auto message = mpi::recv<Repl::ReplMessage>(src, MessageTag::REPL);
+    auto message = mpi::recv<rpc::Repl>(src, MessageTag::REPL);
 
     if (message.order == Repl::Order::PRINT)
     {

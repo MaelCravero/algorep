@@ -10,13 +10,6 @@
 class Client
 {
 public:
-    // struct ClientMessage : public Message
-    // {
-    //     int request_id;
-    //     int entry;
-    //     rpc::command_t command;
-    // };
-
     using command_list = std::vector<std::string>;
 
     Client(rank rank, int nb_server, std::string cmd_file);

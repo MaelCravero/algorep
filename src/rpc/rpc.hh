@@ -62,7 +62,7 @@ namespace rpc
         int commit_index;
     };
 
-    struct REPL
+    struct Repl
     {
         enum class Order : char
         {

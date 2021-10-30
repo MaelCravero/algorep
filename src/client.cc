@@ -42,6 +42,7 @@ Client::Client(int rank, int nb_server, std::string cmd_file)
 
 bool Client::done() const
 {
+    return request_id_ > 0; // TODO implement command lists properly
     return request_id_ >= command_list_.size();
 }
 
@@ -105,7 +106,7 @@ bool Client::recv_order()
     if (!tag)
         return false;
 
-    mpi::recv<Repl::ReplMessage>();
+    mpi::recv<rpc::Repl>();
 
     started_ = true;
     return true;
