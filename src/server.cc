@@ -242,14 +242,18 @@ void Server::follower()
 void Server::heartbeat()
 {
     heartbeat_timeout_.reset();
-    // auto message = init_message();
-    rpc::AppendEntries message{
-        rank_, term_, leader_, -1, -1, {}, log_entries_.get_commit_index()};
 
     for (int i = 1; i <= nb_server_; i++)
     {
         if (i == rank_)
             continue;
+
+        rpc::AppendEntries message{
+            rank_, term_, leader_, -1, -1, {}, log_entries_.get_commit_index()};
+
+        message.prev_log_index = next_index_[i] - 1;
+        message.prev_log_term =
+            next_index_[i] - 1 < 0 ? -1 : log_entries_[next_index_[i] - 1].term;
 
         if (next_index_[i] > log_entries_.last_log_index())
         {
@@ -257,18 +261,12 @@ void Server::heartbeat()
                       << next_index_[i];
 
             message.entry = {};
-            mpi::send(i, message, MessageTag::APPEND_ENTRIES);
         }
 
         else
         {
             auto next_entry = log_entries_[next_index_[i]];
             message.entry = next_entry.data;
-
-            message.prev_log_index = next_index_[i] - 1;
-            message.prev_log_term = next_index_[i] - 1 < 0
-                ? -1
-                : log_entries_[next_index_[i] - 1].term;
 
             LOG(INFO) << "Sending append entries to " << i
                       << ", client_id: " << next_entry.data.source
@@ -277,9 +275,9 @@ void Server::heartbeat()
                       << ", term: " << term_
                       << ", prev_log_index: " << message.prev_log_index
                       << ", prev_log_term: " << message.prev_log_term;
-
-            mpi::send(i, message, MessageTag::APPEND_ENTRIES);
         }
+
+        mpi::send(i, message, MessageTag::APPEND_ENTRIES);
     }
 }
 
