@@ -22,12 +22,6 @@ public:
         LEADER,
     };
 
-    enum class AppendEntriesStatus
-    {
-        SUCCESS,
-        FAILURE,
-    };
-
     Server(rank rank, int nb_server, int nb_request);
 
     /// Main functions
@@ -65,8 +59,6 @@ private:
     /// Elections
     /// \{
     void vote(int server);
-    // void start_election();
-    // void request_vote();
     void become_leader();
     /// \}
 

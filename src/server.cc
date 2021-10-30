@@ -186,8 +186,6 @@ void Server::candidate()
                 status->MPI_SOURCE, status->MPI_TAG);
 
             // If not up to date, give up election
-            // if (recv_data.last_log_index > log_entries_.last_log_index()
-            //     || recv_data.last_log_term > log_entries_.last_log_term())
             if (!recv_data.value)
             {
                 LOG(INFO) << "got a reject vote from " << recv_data.source;
@@ -303,7 +301,7 @@ void Server::follower()
 void Server::heartbeat()
 {
     heartbeat_timeout_.reset();
-    // auto message = init_message();
+
     rpc::AppendEntries message{
         rank_, term_, leader_, -1, -1, {}, log_entries_.get_commit_index()};
 
@@ -363,7 +361,6 @@ void Server::commit_entry(int log_index, int client_id)
     logs_to_be_commited_.erase(log_index);
 
     // Notify client
-    // auto message = init_message();
     rpc::ClientRequestResponse message{rank_, true, leader_};
     mpi::send(client_id, message, MessageTag::ACKNOWLEDGE);
 
@@ -378,7 +375,7 @@ void Server::reject_client(int src, int tag)
 {
     LOG(DEBUG) << "recv from client at " << __FILE__ << ":" << __LINE__;
     auto recv_data = mpi::recv<rpc::ClientRequest>(src, tag);
-    // auto message = init_message();
+
     rpc::ClientRequestResponse message{rank_, false, leader_};
     mpi::send(recv_data.source, message, MessageTag::REJECT);
 }
@@ -393,7 +390,6 @@ void Server::update_commit_index(int index)
                   << log_entries_.get_commit_index() + 1;
     }
 
-    // auto message = init_message();
     // use commit index as log index to avoid update on logs_to_be_commited_ map
     rpc::AppendEntriesResponse message{rank_, true,
                                        log_entries_.get_commit_index(),
@@ -412,7 +408,6 @@ void Server::vote(int server)
 
     has_voted_ = true;
 
-    // auto message = init_message();
     rpc::RequestVoteResponse message{rank_, true};
     mpi::send(server, message, MessageTag::VOTE);
 }
@@ -455,25 +450,6 @@ void Server::append_entries(int term, rpc::ClientRequest data)
 
     log_entries_.append_entry(term, data);
 }
-
-// Server::ServerMessage Server::init_message(int entry)
-// {
-//     ServerMessage message;
-
-//     message.term = term_;
-//     message.last_log_index = log_entries_.last_log_index();
-
-//     message.last_log_term = log_entries_.last_log_term();
-
-//     message.commit_index = log_entries_.get_commit_index();
-
-//     message.entry = entry;
-
-//     message.leader_id = leader_;
-//     message.leader_commit = log_entries_.get_commit_index();
-
-//     return message;
-// }
 
 void Server::broadcast(const rpc::RequestVote& message, int tag)
 {
@@ -587,12 +563,9 @@ void Server::handle_append_entries(int src, int tag)
 
     append_entries(recv_data.term, *recv_data.entry);
 
-    // auto message = init_message();
     rpc::AppendEntriesResponse message{rank_, true,
                                        recv_data.prev_log_index + 1,
                                        log_entries_.get_commit_index()};
-    // message.log_index = recv_data.last_log_index + 1;
-    // message.client_id = recv_data.client_id; FIXME
 
     update_commit_index(recv_data.leader_commit);
     update_term(recv_data.term);
