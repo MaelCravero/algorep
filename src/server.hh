@@ -22,31 +22,6 @@ public:
         LEADER,
     };
 
-    enum class AppendEntriesStatus
-    {
-        SUCCESS,
-        FAILURE,
-    };
-
-    // struct ServerMessage : public Message
-    // {
-    //     int term;
-
-    //     int last_log_index;
-    //     int last_log_term;
-
-    //     int commit_index;
-
-    //     int entry;
-    //     int request_id;
-
-    //     int client_id;
-    //     int log_index;
-
-    //     int leader_id;
-    //     int leader_commit;
-    // };
-
     Server(rank rank, int nb_server, int nb_request);
 
     /// Main functions
