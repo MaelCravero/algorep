@@ -109,31 +109,7 @@ void Server::leader()
     }
 
     else if (status->MPI_TAG == MessageTag::APPEND_ENTRIES)
-    {
-        LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
-
-        auto recv_data =
-            mpi::recv<rpc::AppendEntries>(status->MPI_SOURCE, status->MPI_TAG);
-
-        if (recv_data.term < term_)
-        {
-            LOG(DEBUG) << "received append_entry from :" << recv_data.source
-                       << " with invalid term " << recv_data.term;
-            return;
-        }
-
-        LOG(INFO) << "received message from more legitimate leader: "
-                  << recv_data.source;
-
-        leader_ = recv_data.source;
-        status_ = Status::FOLLOWER;
-
-        // TODO: handle append entries
-
-        update_term(recv_data.term);
-
-        timeout_.reset();
-    }
+        handle_append_entries(status->MPI_SOURCE, status->MPI_TAG);
 
     else
     {
@@ -204,27 +180,9 @@ void Server::candidate()
 
         else if (status->MPI_TAG == MessageTag::APPEND_ENTRIES)
         {
-            LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
-            auto recv_data = mpi::recv<rpc::AppendEntries>(status->MPI_SOURCE,
-                                                           status->MPI_TAG);
-
-            if (recv_data.term >= term_)
-            {
-                LOG(INFO) << "received heartbeat from more legitimate "
-                             "leader or server that won the election: "
-                          << recv_data.source;
-
-                leader_ = recv_data.source;
-                status_ = Status::FOLLOWER;
-
-                update_term(recv_data.term);
-
-                // TODO: handle append_entries
-
-                timeout_.reset();
-
+            handle_append_entries(status->MPI_SOURCE, status->MPI_TAG);
+            if (status_ != Status::CANDIDATE)
                 return;
-            }
         }
 
         else if (status->MPI_TAG == MessageTag::CLIENT_REQUEST)
@@ -529,6 +487,7 @@ void Server::handle_append_entries(int src, int tag)
     }
 
     leader_ = recv_data.source;
+    status_ = Status::FOLLOWER;
     timeout_.reset();
 
     if (recv_data.prev_log_index > log_entries_.last_log_index()
