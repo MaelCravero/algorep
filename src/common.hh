@@ -4,7 +4,6 @@
 enum MessageTag
 {
     APPEND_ENTRIES = 0,
-    HEARTBEAT,
     REQUEST_VOTE,
     VOTE,
     CLIENT_REQUEST,
