@@ -60,6 +60,7 @@ private:
     /// \{
     void vote(int server);
     void become_leader();
+    void start_election();
     /// \}
 
     /// Utilities
@@ -119,8 +120,8 @@ private:
     /// Crash status
     bool has_crashed_;
 
-    /// Has voted
-    bool has_voted_;
+    /// number of vote in current election
+    int nb_vote_;
 
     /// index of the next log entry to send to that server
     std::vector<int> next_index_;
