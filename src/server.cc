@@ -24,7 +24,7 @@ Server::Server(rank rank, int nb_server, int nb_request)
     , heartbeat_timeout_(0.1, 0.15)
     , term_(0)
     , has_crashed_(false)
-    , has_voted_(false)
+    , nb_vote_(0)
     , next_index_(nb_server + 1)
     , commit_index_(nb_server + 1)
     , log_entries_("entries_server" + std::to_string(rank) + ".log")
@@ -51,15 +51,17 @@ void Server::update()
     if (speed_mod_ > 1)
         utils::sleep_for_ms(20 * (speed_mod_ / 3));
 
-    if (status_ != Status::LEADER)
-    {
-        if (timeout_)
-            return candidate();
-
-        follower();
-    }
-    else
+    if (status_ == Status::LEADER)
         leader();
+
+    else if (timeout_)
+        start_election();
+
+    else if (status_ == Status::CANDIDATE)
+        candidate();
+
+    else
+        follower();
 }
 
 bool Server::complete() const
@@ -111,80 +113,55 @@ void Server::leader()
         handle_append_entries(status->MPI_SOURCE, status->MPI_TAG);
 
     else
-    {
         drop_message(status->MPI_SOURCE, status->MPI_TAG);
-    }
 }
 
 void Server::candidate()
 {
-    timeout_.reset();
-    update_term();
+    // on timeout start a new election
+    if (timeout_)
+        return start_election();
 
-    LOG(INFO) << "candidate";
+    auto status = mpi::available_message();
 
-    status_ = Status::CANDIDATE;
+    if (!status)
+        return;
 
-    // Ask for votes
-    auto message = rpc::RequestVote{term_, rank_, log_entries_.last_log_index(),
-                                    log_entries_.last_log_term()};
+    if (status->MPI_TAG == MessageTag::REPL)
+        return handle_repl_request(status->MPI_SOURCE);
 
-    broadcast(message, MessageTag::REQUEST_VOTE);
-
-    int nb_votes = 1; // Vote for himself
-
-    // Need a majority of votes
-    while (nb_votes <= nb_server_ / 2)
+    if (status->MPI_TAG == MessageTag::VOTE)
     {
-        // on timeout start a new election
-        if (timeout_)
-            return candidate();
+        LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
+        auto recv_data = mpi::recv<rpc::RequestVoteResponse>(status->MPI_SOURCE,
+                                                             status->MPI_TAG);
 
-        auto status = mpi::available_message();
-
-        if (!status)
-            continue;
-
-        if (status->MPI_TAG == MessageTag::REPL)
-            return handle_repl_request(status->MPI_SOURCE);
-
-        if (status->MPI_TAG == MessageTag::VOTE)
+        // If not up to date, give up election
+        if (!recv_data.value)
         {
-            LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
-            auto recv_data = mpi::recv<rpc::RequestVoteResponse>(
-                status->MPI_SOURCE, status->MPI_TAG);
+            LOG(INFO) << "got a reject vote from " << recv_data.source;
+            timeout_.reset();
+            status_ = Status::FOLLOWER;
 
-            // If not up to date, give up election
-            if (!recv_data.value)
-            {
-                LOG(INFO) << "got a reject vote from " << recv_data.source;
-                timeout_.reset();
-
-                return;
-            }
-            LOG(INFO) << "got a vote from " << recv_data.source;
-            nb_votes++;
+            return;
         }
 
-        else if (status->MPI_TAG == MessageTag::APPEND_ENTRIES)
-        {
-            handle_append_entries(status->MPI_SOURCE, status->MPI_TAG);
-            if (status_ != Status::CANDIDATE)
-                return;
-        }
-
-        else if (status->MPI_TAG == MessageTag::CLIENT_REQUEST)
-        {
-            reject_client(status->MPI_SOURCE, status->MPI_TAG);
-        }
-
-        else
-        {
-            drop_message(status->MPI_SOURCE, status->MPI_TAG);
-        }
+        LOG(INFO) << "got a vote from " << recv_data.source;
+        nb_vote_++;
     }
 
-    become_leader();
+    else if (status->MPI_TAG == MessageTag::APPEND_ENTRIES)
+        handle_append_entries(status->MPI_SOURCE, status->MPI_TAG);
+
+    else if (status->MPI_TAG == MessageTag::CLIENT_REQUEST)
+        reject_client(status->MPI_SOURCE, status->MPI_TAG);
+
+    else
+        drop_message(status->MPI_SOURCE, status->MPI_TAG);
+
+    // If got a majority of votes, become the leader
+    if (nb_vote_ > nb_server_ / 2)
+        become_leader();
 }
 
 void Server::follower()
@@ -210,9 +187,7 @@ void Server::follower()
         return handle_append_entries(status->MPI_SOURCE, status->MPI_TAG);
 
     else
-    {
         drop_message(status->MPI_SOURCE, status->MPI_TAG);
-    }
 }
 
 //------------------------------------------------------------------//
@@ -326,8 +301,6 @@ void Server::vote(int server)
     LOG(INFO) << "voting for " << server;
     timeout_.reset();
 
-    has_voted_ = true;
-
     rpc::RequestVoteResponse message{rank_, true};
     mpi::send(server, message, MessageTag::VOTE);
 }
@@ -342,6 +315,22 @@ void Server::become_leader()
     LOG(INFO) << "become the leader";
 }
 
+void Server::start_election()
+{
+    LOG(INFO) << "Become candidate";
+    status_ = Status::CANDIDATE;
+    timeout_.reset();
+    update_term();
+
+    // Ask for votes
+    auto message = rpc::RequestVote{term_, rank_, log_entries_.last_log_index(),
+                                    log_entries_.last_log_term()};
+
+    broadcast(message, MessageTag::REQUEST_VOTE);
+    nb_vote_ = 1; // Vote for himself
+
+    candidate();
+}
 //------------------------------------------------------------------//
 //                            Utilities                             //
 //------------------------------------------------------------------//
@@ -354,10 +343,7 @@ void Server::update_term()
 void Server::update_term(int term)
 {
     if (term >= term_)
-    {
         term_ = term;
-        has_voted_ = false;
-    }
 
     LOG(INFO) << "current term: " << term_;
 }
@@ -553,30 +539,31 @@ void Server::handle_repl_request(int src)
         std::cout << " Speed: " << speed_mod_ << "\n";
         std::cout << " Crash: " << std::boolalpha << has_crashed_ << "\n";
         std::cout << "Leader: " << leader_ << "\n";
+
         if (leader_ == rank_)
         {
             std::cout << "NxtIdx: ";
             for (int i = 1; i <= nb_server_; i++)
-            {
                 std::cout << next_index_[i] << " ";
-            }
             std::cout << "\n";
 
             std::cout << "Commit: ";
             for (int i = 1; i <= nb_server_; i++)
-            {
                 std::cout << commit_index_[i] << " ";
-            }
             std::cout << "\n";
         }
+
         std::cout << "  Term: " << term_ << "\n";
         std::cout << "NbLogs: " << log_entries_.get_commit_index() + 1 << "/"
                   << log_entries_.size() << "\n\n";
     }
+
     if (message.order == Repl::Order::SPEED)
         speed_mod_ = message.speed_level;
+
     if (message.order == Repl::Order::CRASH)
         has_crashed_ = true;
+
     if (message.order == Repl::Order::RECOVERY && has_crashed_)
     {
         LOG(DEBUG) << "recover";
