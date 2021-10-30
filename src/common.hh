@@ -15,11 +15,5 @@ enum MessageTag
     REPL,
 };
 
-struct Message
-{
-    int source;
-    int tag;
-};
-
 /// Various common types
 using rank = int;

@@ -65,10 +65,10 @@ void Server::update()
 bool Server::complete() const
 {
     if (leader_ != rank_)
-        return log_entries_.get_commit_index() == nb_request_ - 1;
+        return log_entries_.get_commit_index() >= nb_request_ - 1;
 
     for (int i = 1; i <= nb_server_; i++)
-        if (i != rank_ && commit_index_[i] != nb_request_ - 1)
+        if (i != rank_ && commit_index_[i] < nb_request_ - 1)
             return false;
 
     return true;
@@ -451,25 +451,6 @@ void Server::append_entries(int term, rpc::ClientRequest data)
     log_entries_.append_entry(term, data);
 }
 
-// Server::ServerMessage Server::init_message(int entry)
-// {
-//     ServerMessage message;
-
-//     message.term = term_;
-//     message.last_log_index = log_entries_.last_log_index();
-
-//     message.last_log_term = log_entries_.last_log_term();
-
-//     message.commit_index = log_entries_.get_commit_index();
-
-//     message.entry = entry;
-
-//     message.leader_id = leader_;
-//     message.leader_commit = log_entries_.get_commit_index();
-
-//     return message;
-// }
-
 void Server::broadcast(const rpc::RequestVote& message, int tag)
 {
     for (auto i = 1; i <= nb_server_; i++)
@@ -586,8 +567,6 @@ void Server::handle_append_entries(int src, int tag)
     rpc::AppendEntriesResponse message{rank_, true,
                                        recv_data.prev_log_index + 1,
                                        log_entries_.get_commit_index()};
-    // message.log_index = recv_data.last_log_index + 1;
-    // message.client_id = recv_data.client_id; FIXME
 
     update_commit_index(recv_data.leader_commit);
     update_term(recv_data.term);
