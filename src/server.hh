@@ -72,6 +72,8 @@ private:
     void broadcast(const rpc::RequestVote& message, int tag);
     // Ignore messages if crashed
     void ignore_messages();
+    // Drop incoming message
+    void drop_message(int src, int tag);
     /// \}
 
     /// Handlers

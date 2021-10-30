@@ -112,18 +112,7 @@ void Server::leader()
 
     else
     {
-        LOG(DEBUG) << "received message from :" << status->MPI_SOURCE
-                   << " with tag " << status->MPI_SOURCE;
-
-        if (status->MPI_TAG == MessageTag::REQUEST_VOTE)
-            mpi::recv<rpc::RequestVote>(status->MPI_SOURCE, status->MPI_TAG);
-        else if (status->MPI_TAG == MessageTag::VOTE)
-            mpi::recv<rpc::RequestVoteResponse>(status->MPI_SOURCE,
-                                                status->MPI_TAG);
-        else
-        {
-            assert(false);
-        }
+        drop_message(status->MPI_SOURCE, status->MPI_TAG);
     }
 }
 
@@ -191,11 +180,7 @@ void Server::candidate()
 
         else
         {
-            LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
-            // FIXME
-            mpi::recv<rpc::AppendEntries>(status->MPI_SOURCE, status->MPI_TAG);
-            LOG(DEBUG) << "received message from :" << status->MPI_SOURCE
-                       << " with tag " << status->MPI_TAG;
+            drop_message(status->MPI_SOURCE, status->MPI_TAG);
         }
     }
 
@@ -226,12 +211,7 @@ void Server::follower()
 
     else
     {
-        LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
-        // FIXME
-        mpi::recv<rpc::AppendEntries>(status->MPI_SOURCE, status->MPI_TAG);
-
-        LOG(DEBUG) << "received message from :" << status->MPI_SOURCE
-                   << " with tag " << status->MPI_TAG;
+        drop_message(status->MPI_SOURCE, status->MPI_TAG);
     }
 }
 
@@ -405,18 +385,16 @@ void Server::ignore_messages()
         if (status->MPI_TAG == MessageTag::REPL)
             break;
 
-        if (status->MPI_TAG == MessageTag::CLIENT_REQUEST)
-        {
-            LOG(DEBUG) << "recv from client at " << __FILE__ << ":" << __LINE__;
-            mpi::recv<rpc::ClientRequest>(status->MPI_SOURCE, status->MPI_TAG);
-        }
-        else
-        {
-            LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
-            mpi::recv<rpc::AppendEntries>(status->MPI_SOURCE, status->MPI_TAG);
-            // FIXME
-        }
+        drop_message(status->MPI_SOURCE, status->MPI_TAG);
     }
+}
+
+void Server::drop_message(int src, int tag)
+{
+    LOG(WARN) << "dropping message from :" << src << " with tag " << tag;
+
+    // AppendEntries is the biggest RPC
+    mpi::recv<rpc::AppendEntries>(src, tag);
 }
 
 //------------------------------------------------------------------//
@@ -554,7 +532,7 @@ void Server::handle_request_vote(int src, int tag)
         else
         {
             LOG(INFO) << "rejecting vote for " << src;
-            // auto message = init_message();
+
             rpc::RequestVoteResponse message{rank_, false};
             mpi::send(src, message, MessageTag::VOTE);
         }
