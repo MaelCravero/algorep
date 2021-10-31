@@ -80,9 +80,7 @@ private:
     /// Handlers
     /// \{
     void
-    handle_accept_append_entry(const rpc::AppendEntriesResponse& recv_data);
-    void
-    handle_reject_append_entry(const rpc::AppendEntriesResponse& recv_data);
+    handle_append_entry_response(const rpc::AppendEntriesResponse& recv_data);
     void handle_append_entries(int src, int tag);
     void handle_client_request(int src, int tag);
     void handle_request_vote(int src, int tag);

@@ -103,10 +103,7 @@ void Server::leader()
         auto recv_data = mpi::recv<rpc::AppendEntriesResponse>(
             status->MPI_SOURCE, status->MPI_TAG);
 
-        if (recv_data.value)
-            handle_accept_append_entry(recv_data);
-        else
-            handle_reject_append_entry(recv_data);
+        handle_append_entry_response(recv_data);
     }
 
     else if (status->MPI_TAG == MessageTag::APPEND_ENTRIES)
@@ -284,12 +281,6 @@ void Server::update_commit_index(int index)
         LOG(INFO) << "commited log number: "
                   << log_entries_.get_commit_index() + 1;
     }
-
-    // use commit index as log index to avoid update on logs_to_be_commited_ map
-    rpc::AppendEntriesResponse message{rank_, true,
-                                       log_entries_.get_commit_index(),
-                                       log_entries_.get_commit_index()};
-    mpi::send(leader_, message, MessageTag::APPEND_ENTRIES_RESPONSE);
 }
 
 //------------------------------------------------------------------//
@@ -387,19 +378,21 @@ void Server::drop_message(int src, int tag)
 //                         Message handlers                         //
 //------------------------------------------------------------------//
 
-void Server::handle_accept_append_entry(
+void Server::handle_append_entry_response(
     const rpc::AppendEntriesResponse& recv_data)
 {
-    LOG(INFO) << "received acknowledge for log :" << recv_data.log_index
-              << " from server " << recv_data.source;
+    LOG(INFO) << "received append_entry_response from server :"
+              << recv_data.source << ", added log: " << std::boolalpha
+              << recv_data.value;
 
     next_index_[recv_data.source] = recv_data.log_index + 1;
     commit_index_[recv_data.source] = recv_data.commit_index;
 
     LOG(INFO) << "server :" << recv_data.source
-              << " index: " << next_index_[recv_data.source];
+              << " next index: " << next_index_[recv_data.source]
+              << " commit index: " << commit_index_[recv_data.source];
 
-    if (logs_to_be_commited_.contains(recv_data.log_index))
+    if (recv_data.value && logs_to_be_commited_.contains(recv_data.log_index))
     {
         auto nb_ack = ++logs_to_be_commited_[recv_data.log_index];
 
@@ -418,16 +411,6 @@ void Server::handle_accept_append_entry(
             }
         }
     }
-}
-
-void Server::handle_reject_append_entry(
-    const rpc::AppendEntriesResponse& recv_data)
-{
-    LOG(INFO) << "received reject for log :" << recv_data.log_index
-              << " from server " << recv_data.source;
-
-    if (next_index_[recv_data.source]-- <= 0)
-        next_index_[recv_data.source] = 0;
 }
 
 void Server::handle_append_entries(int src, int tag)
@@ -479,8 +462,8 @@ void Server::handle_append_entries(int src, int tag)
     update_commit_index(recv_data.leader_commit);
     update_term(recv_data.term);
 
-    message = {rank_, true, log_entries_.last_log_index(),
-               log_entries_.get_commit_index()};
+    message = {rank_, recv_data.entry.has_value(),
+               log_entries_.last_log_index(), log_entries_.get_commit_index()};
 
     LOG(INFO) << "accept append entries " << message.commit_index << "/"
               << message.log_index;
@@ -498,7 +481,7 @@ void Server::handle_client_request(int src, int tag)
 
     append_entries(term_, recv_data);
 
-    logs_to_be_commited_[log_entries_.last_log_index()] = 1;
+    logs_to_be_commited_.try_emplace(log_entries_.last_log_index(), 1);
 }
 
 void Server::handle_request_vote(int src, int tag)
