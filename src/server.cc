@@ -45,7 +45,7 @@ Server::~Server()
 
 void Server::update()
 {
-    auto status = mpi::available_message();
+    auto status = mpi_.available_message();
 
     if (status && status->MPI_TAG == MessageTag::REPL)
         return handle_repl_request(status->MPI_SOURCE);
@@ -83,7 +83,7 @@ void Server::leader()
     if (heartbeat_timeout_)
         return heartbeat();
 
-    auto status = mpi::available_message();
+    auto status = mpi_.available_message();
 
     if (!status)
         return;
@@ -98,7 +98,7 @@ void Server::leader()
     {
         LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
 
-        auto recv_data = mpi::recv<rpc::AppendEntriesResponse>(
+        auto recv_data = mpi_.recv<rpc::AppendEntriesResponse>(
             status->MPI_SOURCE, status->MPI_TAG);
 
         handle_append_entry_response(recv_data);
@@ -117,7 +117,7 @@ void Server::candidate()
     if (timeout_)
         return start_election();
 
-    auto status = mpi::available_message();
+    auto status = mpi_.available_message();
 
     if (!status)
         return;
@@ -128,7 +128,7 @@ void Server::candidate()
     if (status->MPI_TAG == MessageTag::VOTE)
     {
         LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
-        auto recv_data = mpi::recv<rpc::RequestVoteResponse>(status->MPI_SOURCE,
+        auto recv_data = mpi_.recv<rpc::RequestVoteResponse>(status->MPI_SOURCE,
                                                              status->MPI_TAG);
 
         // If not up to date, give up election
@@ -166,7 +166,7 @@ void Server::follower()
 {
     status_ = Status::FOLLOWER;
 
-    auto status = mpi::available_message();
+    auto status = mpi_.available_message();
 
     if (!status)
         return;
@@ -230,7 +230,7 @@ void Server::heartbeat()
                       << ", prev_log_term: " << message.prev_log_term;
         }
 
-        mpi::send(i, message, MessageTag::APPEND_ENTRIES);
+        mpi_.send(i, message, MessageTag::APPEND_ENTRIES);
     }
 }
 
@@ -255,7 +255,7 @@ void Server::commit_entry(int log_index, int client_id)
 
     // Notify client
     rpc::ClientRequestResponse message{rank_, true, leader_};
-    mpi::send(client_id, message, MessageTag::CLIENT_REQUEST_RESPONSE);
+    mpi_.send(client_id, message, MessageTag::CLIENT_REQUEST_RESPONSE);
 
     LOG(INFO) << "Notify client " << client_id << " for request " << log_index;
 }
@@ -267,10 +267,10 @@ void Server::commit_entry(int log_index, int client_id)
 void Server::reject_client(int src, int tag)
 {
     LOG(DEBUG) << "recv from client at " << __FILE__ << ":" << __LINE__;
-    auto recv_data = mpi::recv<rpc::ClientRequest>(src, tag);
+    auto recv_data = mpi_.recv<rpc::ClientRequest>(src, tag);
 
     rpc::ClientRequestResponse message{rank_, false, leader_};
-    mpi::send(recv_data.source, message, MessageTag::CLIENT_REQUEST_RESPONSE);
+    mpi_.send(recv_data.source, message, MessageTag::CLIENT_REQUEST_RESPONSE);
 }
 
 void Server::update_commit_index(int index)
@@ -294,7 +294,7 @@ void Server::vote(int server)
     timeout_.reset();
 
     rpc::RequestVoteResponse message{rank_, true};
-    mpi::send(server, message, MessageTag::VOTE);
+    mpi_.send(server, message, MessageTag::VOTE);
 }
 
 void Server::become_leader()
@@ -356,12 +356,12 @@ void Server::broadcast(const rpc::RequestVote& message, int tag)
 {
     for (auto i = 1; i <= nb_server_; i++)
         if (i != rank_)
-            mpi::send(i, message, tag);
+            mpi_.send(i, message, tag);
 }
 
 void Server::ignore_messages()
 {
-    while (auto status = mpi::available_message())
+    while (auto status = mpi_.available_message())
     {
         if (status->MPI_TAG == MessageTag::REPL)
             break;
@@ -375,7 +375,7 @@ void Server::drop_message(int src, int tag)
     LOG(WARN) << "dropping message from :" << src << " with tag " << tag;
 
     // AppendEntries is the biggest RPC
-    mpi::recv<rpc::AppendEntries>(src, tag);
+    mpi_.recv<rpc::AppendEntries>(src, tag);
 }
 
 //------------------------------------------------------------------//
@@ -420,7 +420,7 @@ void Server::handle_append_entry_response(
 void Server::handle_append_entries(int src, int tag)
 {
     LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
-    auto recv_data = mpi::recv<rpc::AppendEntries>(src, tag);
+    auto recv_data = mpi_.recv<rpc::AppendEntries>(src, tag);
 
     rpc::AppendEntriesResponse message{rank_, false,
                                        log_entries_.last_log_index(),
@@ -433,7 +433,7 @@ void Server::handle_append_entries(int src, int tag)
                   << term_;
 
         update_term(recv_data.term);
-        mpi::send(leader_, message, MessageTag::APPEND_ENTRIES_RESPONSE);
+        mpi_.send(leader_, message, MessageTag::APPEND_ENTRIES_RESPONSE);
         return;
     }
 
@@ -456,7 +456,7 @@ void Server::handle_append_entries(int src, int tag)
             message.log_index = log_entries_.last_log_index();
         }
 
-        return mpi::send(leader_, message, MessageTag::APPEND_ENTRIES_RESPONSE);
+        return mpi_.send(leader_, message, MessageTag::APPEND_ENTRIES_RESPONSE);
     }
 
     // last_log_index == prev_log_index
@@ -485,14 +485,14 @@ void Server::handle_append_entries(int src, int tag)
     LOG(INFO) << "accept append entries " << message.commit_index << "/"
               << message.log_index;
 
-    mpi::send(leader_, message, MessageTag::APPEND_ENTRIES_RESPONSE);
+    mpi_.send(leader_, message, MessageTag::APPEND_ENTRIES_RESPONSE);
 }
 
 void Server::handle_client_request(int src, int tag)
 {
     LOG(DEBUG) << "recv from client at " << __FILE__ << ":" << __LINE__;
 
-    auto recv_data = mpi::recv<rpc::ClientRequest>(src, tag);
+    auto recv_data = mpi_.recv<rpc::ClientRequest>(src, tag);
 
     LOG(INFO) << "received message from client:" << recv_data.source;
 
@@ -504,7 +504,7 @@ void Server::handle_client_request(int src, int tag)
 void Server::handle_request_vote(int src, int tag)
 {
     LOG(DEBUG) << "recv from server at " << __FILE__ << ":" << __LINE__;
-    auto recv_data = mpi::recv<rpc::RequestVote>(src, tag);
+    auto recv_data = mpi_.recv<rpc::RequestVote>(src, tag);
 
     if (term_ <= recv_data.term)
     {
@@ -520,7 +520,7 @@ void Server::handle_request_vote(int src, int tag)
             LOG(INFO) << "rejecting vote for " << src;
 
             rpc::RequestVoteResponse message{rank_, false};
-            mpi::send(src, message, MessageTag::VOTE);
+            mpi_.send(src, message, MessageTag::VOTE);
             start_election();
         }
     }
@@ -529,7 +529,7 @@ void Server::handle_request_vote(int src, int tag)
 void Server::handle_repl_request(int src)
 {
     LOG(DEBUG) << "recv from repl at " << __FILE__ << ":" << __LINE__;
-    auto message = mpi::recv<rpc::Repl>(src, MessageTag::REPL);
+    auto message = mpi_.recv<rpc::Repl>(src, MessageTag::REPL);
 
     if (message.order == Repl::Order::PRINT)
     {

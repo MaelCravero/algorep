@@ -135,4 +135,5 @@ private:
     std::map<int, int> logs_to_be_commited_;
 
     utils::Logger logger_;
+    mpi::Mpi mpi_;
 };

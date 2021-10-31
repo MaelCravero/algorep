@@ -82,7 +82,7 @@ void Repl::execute(Command command)
         if (command.order == Order::BEGIN && command.target <= nb_client_)
             command.target += nb_server_;
 
-        mpi::send(command.target, message, MessageTag::REPL);
+        mpi_.send(command.target, message, MessageTag::REPL);
     }
 
     else
@@ -92,10 +92,10 @@ void Repl::execute(Command command)
                 mpi::send(i, message, MessageTag::REPL);
         else if (command.order != Order::BEGIN)
             for (int i = 1; i <= nb_server_; i++)
-                mpi::send(i, message, MessageTag::REPL);
+                mpi_.send(i, message, MessageTag::REPL);
         else
             for (int i = nb_server_ + 1; i <= nb_server_ + nb_client_; i++)
-                mpi::send(i, message, MessageTag::REPL);
+                mpi_.send(i, message, MessageTag::REPL);
     }
 }
 

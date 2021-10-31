@@ -35,6 +35,7 @@ Client::Client(int rank, int nb_server, std::string cmd_file)
     , started_(false)
     , done_(false)
     , command_list_(init_commands(cmd_file))
+    , mpi_()
 {
 #ifdef _DEBUG
     std::cout << "client " << rank_ << "has PID " << getpid() << std::endl;
@@ -56,7 +57,7 @@ void Client::send_request()
 
     utils::Timeout timeout(2, 2.6);
 
-    mpi::send(server_, message, MessageTag::CLIENT_REQUEST);
+    mpi_.send(server_, message, MessageTag::CLIENT_REQUEST);
 
     int count_retry = 0;
 
@@ -66,22 +67,22 @@ void Client::send_request()
         {
             server_ = server_ % nb_server_ + 1;
 
-            mpi::send(server_, message, MessageTag::CLIENT_REQUEST);
+            mpi_.send(server_, message, MessageTag::CLIENT_REQUEST);
             timeout.reset();
 
             count_retry++;
         }
 
-        if (mpi::available_message(server_))
+        if (mpi_.available_message(server_))
         {
-            auto recv_data = mpi::recv<rpc::ClientRequestResponse>(server_);
+            auto recv_data = mpi_.recv<rpc::ClientRequestResponse>(server_);
 
             if (!recv_data.value)
             {
                 server_ = recv_data.leader;
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-                mpi::send(server_, message, MessageTag::CLIENT_REQUEST);
+                mpi_.send(server_, message, MessageTag::CLIENT_REQUEST);
                 timeout.reset();
 
                 count_retry++;
@@ -107,12 +108,12 @@ bool Client::started()
 
 bool Client::recv_order()
 {
-    auto tag = mpi::available_message(MPI_ANY_SOURCE, MessageTag::REPL);
+    auto tag = mpi_.available_message(MPI_ANY_SOURCE, MessageTag::REPL);
 
     if (!tag)
         return false;
 
-    auto recv_data = mpi::recv<rpc::Repl>();
+    auto recv_data = mpi_.recv<rpc::Repl>();
 
     if (recv_data.order == Repl::Order::STOP)
         done_ = true;
