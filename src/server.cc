@@ -257,7 +257,7 @@ void Server::commit_entry(int log_index, int client_id)
 
     // Notify client
     rpc::ClientRequestResponse message{rank_, true, leader_};
-    mpi::send(client_id, message, MessageTag::ACKNOWLEDGE);
+    mpi::send(client_id, message, MessageTag::CLIENT_REQUEST_RESPONSE);
 
     LOG(INFO) << "Notify client " << client_id << " for request " << log_index;
 }
@@ -272,7 +272,7 @@ void Server::reject_client(int src, int tag)
     auto recv_data = mpi::recv<rpc::ClientRequest>(src, tag);
 
     rpc::ClientRequestResponse message{rank_, false, leader_};
-    mpi::send(recv_data.source, message, MessageTag::REJECT);
+    mpi::send(recv_data.source, message, MessageTag::CLIENT_REQUEST_RESPONSE);
 }
 
 void Server::update_commit_index(int index)
