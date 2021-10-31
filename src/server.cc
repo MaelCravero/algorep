@@ -304,6 +304,9 @@ void Server::become_leader()
     status_ = Status::LEADER;
     leader_ = rank_;
     LOG(INFO) << "become the leader";
+
+    // Only keep what has been commited in the log
+    log_entries_.delete_from_index(log_entries_.get_commit_index() + 1);
 }
 
 void Server::start_election()
@@ -419,7 +422,7 @@ void Server::handle_append_entries(int src, int tag)
     auto recv_data = mpi::recv<rpc::AppendEntries>(src, tag);
 
     rpc::AppendEntriesResponse message{rank_, false,
-                                       log_entries_.last_log_index() + 1,
+                                       log_entries_.last_log_index(),
                                        log_entries_.get_commit_index()};
 
     if (recv_data.term < term_)
@@ -552,6 +555,9 @@ void Server::handle_repl_request(int src)
         LOG(DEBUG) << "recover";
         has_crashed_ = false;
         status_ = Status::FOLLOWER;
+
+        // Only keep what has been commited in the log
+        log_entries_.delete_from_index(log_entries_.get_commit_index() + 1);
         timeout_.reset();
     }
 
