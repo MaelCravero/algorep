@@ -519,6 +519,7 @@ void Server::handle_request_vote(int src, int tag)
 
             rpc::RequestVoteResponse message{rank_, false};
             mpi::send(src, message, MessageTag::VOTE);
+            start_election();
         }
     }
 }
