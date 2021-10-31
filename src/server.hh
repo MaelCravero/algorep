@@ -32,6 +32,9 @@ public:
 
     /// Has the system logged all client requests
     bool complete() const;
+
+    /// Get stats about the number of messages sent and received
+    void print_stats() const;
     /// \}
 
 private:

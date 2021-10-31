@@ -11,6 +11,8 @@ void server(rank rank, int nb_server)
 
     while (!server.complete())
         server.update();
+
+    server.print_stats();
 }
 
 void client(rank rank, int nb_server)
