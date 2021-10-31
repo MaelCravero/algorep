@@ -153,6 +153,9 @@ void Server::candidate()
     else if (status->MPI_TAG == MessageTag::CLIENT_REQUEST)
         reject_client(status->MPI_SOURCE, status->MPI_TAG);
 
+    else if (status->MPI_TAG == MessageTag::REQUEST_VOTE)
+        handle_request_vote(status->MPI_SOURCE, status->MPI_TAG);
+
     else
         drop_message(status->MPI_SOURCE, status->MPI_TAG);
 
@@ -425,12 +428,15 @@ void Server::handle_append_entries(int src, int tag)
                                        log_entries_.last_log_index(),
                                        log_entries_.get_commit_index()};
 
-    if (recv_data.term < term_)
+    if (recv_data.term < term_
+        || log_entries_.get_commit_index() > recv_data.leader_commit)
     {
         LOG(INFO) << "rejecting append entries term:" << recv_data.term << "|"
                   << term_;
 
-        return mpi::send(leader_, message, MessageTag::APPEND_ENTRIES_RESPONSE);
+        update_term(recv_data.term);
+        mpi::send(leader_, message, MessageTag::APPEND_ENTRIES_RESPONSE);
+        return;
     }
 
     leader_ = recv_data.source;
@@ -445,6 +451,12 @@ void Server::handle_append_entries(int src, int tag)
                   << "|" << log_entries_.last_log_index()
                   << " log term:" << recv_data.prev_log_term << "|"
                   << log_entries_.last_log_term();
+
+        if (recv_data.prev_log_term > log_entries_.last_log_term())
+        {
+            log_entries_.delete_from_index(recv_data.prev_log_index);
+            message.log_index = log_entries_.last_log_index();
+        }
 
         return mpi::send(leader_, message, MessageTag::APPEND_ENTRIES_RESPONSE);
     }
