@@ -76,6 +76,27 @@ bool Server::complete() const
     return true;
 }
 
+void Server::print_stats() const
+{
+    auto [sent, recv] = mpi_.get_stats();
+
+    std::cout << "Server: " << rank_ << " stats:\n";
+
+    for (int t = MessageTag::APPEND_ENTRIES; t < MessageTag::REPL; t++)
+        if (sent.contains(t))
+            std::cout << "sent: " << sent.at(t) << " messages with tag "
+                      << tag_to_str(t) << "\n";
+
+    std::cout << "\n";
+
+    for (int t = MessageTag::APPEND_ENTRIES; t < MessageTag::REPL; t++)
+        if (recv.contains(t))
+            std::cout << "received: " << recv.at(t) << " messages with tag "
+                      << tag_to_str(t) << "\n";
+
+    std::cout << "\n";
+}
+
 //------------------------------------------------------------------//
 //                            Main roles                            //
 //------------------------------------------------------------------//
