@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "common.hh"
+#include "mpi/mpi.hh"
 #include "utils/time.hh"
 
 class Client
@@ -28,4 +29,5 @@ private:
     bool started_;
 
     command_list command_list_;
+    mpi::Mpi mpi_;
 };

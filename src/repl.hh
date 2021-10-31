@@ -4,6 +4,7 @@
 #include <string>
 
 #include "common.hh"
+#include "mpi/mpi.hh"
 #include "rpc/rpc.hh"
 
 class Repl
@@ -29,4 +30,5 @@ public:
 private:
     int nb_server_;
     int nb_client_;
+    mpi::Mpi mpi_;
 };
