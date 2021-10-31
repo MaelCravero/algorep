@@ -425,12 +425,15 @@ void Server::handle_append_entries(int src, int tag)
                                        log_entries_.last_log_index(),
                                        log_entries_.get_commit_index()};
 
-    if (recv_data.term < term_)
+    if (recv_data.term < term_
+        || log_entries_.get_commit_index() > recv_data.leader_commit)
     {
         LOG(INFO) << "rejecting append entries term:" << recv_data.term << "|"
                   << term_;
 
-        return mpi::send(leader_, message, MessageTag::APPEND_ENTRIES_RESPONSE);
+        update_term(recv_data.term);
+        mpi::send(leader_, message, MessageTag::APPEND_ENTRIES_RESPONSE);
+        return start_election();
     }
 
     leader_ = recv_data.source;
@@ -507,6 +510,7 @@ void Server::handle_request_vote(int src, int tag)
 
             rpc::RequestVoteResponse message{rank_, false};
             mpi::send(src, message, MessageTag::VOTE);
+            start_election();
         }
     }
 }
