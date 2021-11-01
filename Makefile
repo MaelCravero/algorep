@@ -34,10 +34,13 @@ $(BIN): $(OBJ)
 debug: CPPFLAGS += -D_DEBUG
 debug: run
 
+perf: CPPFLAGS += -D_PERF
+perf: clean run
+
 gen_commands:
 	./gen_cmd.sh $(NSERVER) $(NCLIENT) $(CMD_FILE) $(NCMD)
 
 -include ${DEP}
 
 clean:
-	$(RM) $(OBJ) $(BIN) $(DEP) *.log
+	$(RM) $(OBJ) $(BIN) $(DEP) *.log *.csv

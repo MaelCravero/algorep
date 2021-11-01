@@ -12,7 +12,9 @@ void server(rank rank, int nb_server)
     while (!server.complete())
         server.update();
 
-    server.print_stats();
+#ifdef _PERF
+    server.write_stats();
+#endif
 }
 
 void client(rank rank, int nb_server)
