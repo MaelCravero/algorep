@@ -15,7 +15,7 @@ public:
     Client(rank rank, int nb_server, std::string cmd_file);
 
     bool done() const;
-    bool send_request();
+    void send_request();
     bool started();
     bool recv_order();
 
@@ -26,6 +26,7 @@ private:
 
     unsigned request_id_;
     bool started_;
+    bool done_;
 
     command_list command_list_;
 };

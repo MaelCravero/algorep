@@ -33,6 +33,7 @@ Client::Client(int rank, int nb_server, std::string cmd_file)
     , server_(rank % nb_server + 1)
     , request_id_(0)
     , started_(false)
+    , done_(false)
     , command_list_(init_commands(cmd_file))
 {
 #ifdef _DEBUG
@@ -42,14 +43,16 @@ Client::Client(int rank, int nb_server, std::string cmd_file)
 
 bool Client::done() const
 {
-    return request_id_ > 0; // TODO implement command lists properly
-    return request_id_ >= command_list_.size();
+    // return request_id_ > 0; // TODO implement command lists properly
+    return done_;
 }
 
-bool Client::send_request()
+void Client::send_request()
 {
+    if (done_)
+        return;
+
     rpc::ClientRequest message{rank_, request_id_, command_list_[request_id_]};
-    request_id_++;
 
     utils::Timeout timeout(2, 2.6);
 
@@ -86,12 +89,15 @@ bool Client::send_request()
 
             else
             {
-                return true;
+                // return true;
+                request_id_++;
+                if (request_id_ >= command_list_.size())
+                    done_ = true;
+
+                return;
             }
         }
     }
-
-    return false;
 }
 
 bool Client::started()

@@ -23,6 +23,7 @@ public:
     };
 
     Server(rank rank, int nb_server, int nb_request);
+    ~Server();
 
     /// Main functions
     /// \{

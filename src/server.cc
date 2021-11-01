@@ -34,6 +34,11 @@ Server::Server(rank rank, int nb_server, int nb_request)
     LOG(DEBUG) << "server " << rank_ << "has PID " << getpid();
 }
 
+Server::~Server()
+{
+    LOG(INFO) << "shutting down";
+}
+
 //------------------------------------------------------------------//
 //                          Main functions                          //
 //------------------------------------------------------------------//
@@ -212,7 +217,7 @@ void Server::heartbeat()
             LOG(INFO) << "server: " << i << " is up to date, next_index is "
                       << next_index_[i];
 
-            message.entry = {};
+            message.entry = std::nullopt;
         }
 
         else
@@ -468,8 +473,12 @@ void Server::handle_append_entries(int src, int tag)
     update_commit_index(recv_data.leader_commit);
     update_term(recv_data.term);
 
-    message = {rank_, recv_data.entry.has_value(),
-               log_entries_.last_log_index(), log_entries_.get_commit_index()};
+    // message = {rank_, recv_data.entry.has_value(),
+    //            log_entries_.last_log_index(),
+    //            log_entries_.get_commit_index()};
+    message.value = recv_data.entry.has_value();
+    message.log_index = log_entries_.last_log_index();
+    message.commit_index = log_entries_.get_commit_index();
 
     LOG(INFO) << "accept append entries " << message.commit_index << "/"
               << message.log_index;
