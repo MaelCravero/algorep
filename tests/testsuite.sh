@@ -1,7 +1,10 @@
 check_diff()
 {
+    cut -d " " -f 6- entries_server1.log > 1.log
     for i in $(seq "$1"); do
-        diff -q entries_server1.log entries_server"$i".log
+        cut -d " " -f 6- entries_server"$i".log > "$i".log
+
+        diff -q 1.log "$i".log
         if [ $? -ne 0 ] ; then
             return 1;
         fi

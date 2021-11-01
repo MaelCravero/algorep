@@ -53,8 +53,7 @@ namespace utils
         commit_index_++;
 
         const auto entry = entries_[commit_index_];
-        LOG(INFO) << ", term: " << entry.term
-                  << ", client: " << entry.data.source
+        LOG(INFO) << "term: " << entry.term << ", client: " << entry.data.source
                   << ", command: " << entry.data.command << ", id "
                   << entry.data.id;
 
