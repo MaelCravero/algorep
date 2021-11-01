@@ -13,17 +13,17 @@
 //                           Constructor                            //
 //------------------------------------------------------------------//
 
-Server::Server(rank rank, int nb_server, int nb_request)
+Server::Server(rank rank, int nb_server)
     : status_(Status::FOLLOWER)
     , rank_(rank)
     , nb_server_(nb_server)
-    , nb_request_(nb_request)
     , leader_(rank)
     , speed_mod_(1)
     , timeout_(0.5, 1)
     , heartbeat_timeout_(0.1, 0.15)
     , term_(0)
     , has_crashed_(false)
+    , stop_(false)
     , nb_vote_(0)
     , next_index_(nb_server + 1)
     , commit_index_(nb_server + 1)
@@ -71,14 +71,7 @@ void Server::update()
 
 bool Server::complete() const
 {
-    if (leader_ != rank_)
-        return log_entries_.get_commit_index() >= nb_request_ - 1;
-
-    for (int i = 1; i <= nb_server_; i++)
-        if (i != rank_ && commit_index_[i] < nb_request_ - 1)
-            return false;
-
-    return true;
+    return stop_;
 }
 
 //------------------------------------------------------------------//
@@ -573,6 +566,9 @@ void Server::handle_repl_request(int src)
         log_entries_.delete_from_index(log_entries_.get_commit_index() + 1);
         timeout_.reset();
     }
+
+    if (message.order == Repl::Order::STOP)
+        stop_ = true;
 
     timeout_.speed_mod = speed_mod_;
     heartbeat_timeout_.speed_mod = speed_mod_;

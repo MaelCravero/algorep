@@ -5,9 +5,9 @@
 #include "repl.hh"
 #include "server.hh"
 
-void server(rank rank, int nb_server, int nb_client)
+void server(rank rank, int nb_server)
 {
-    Server server(rank, nb_server, nb_client);
+    Server server(rank, nb_server);
 
     while (!server.complete())
         server.update();
@@ -78,7 +78,7 @@ int main(int argc, char* argv[])
         client(rank, nb_server);
 
     else if (is_server(rank, nb_server))
-        server(rank, nb_server, nb_client);
+        server(rank, nb_server);
 
     else if (is_repl(rank))
         repl(nb_server, nb_client);
