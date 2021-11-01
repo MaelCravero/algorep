@@ -22,7 +22,7 @@ public:
         LEADER,
     };
 
-    Server(rank rank, int nb_server, int nb_request);
+    Server(rank rank, int nb_server);
     ~Server();
 
     /// Main functions
@@ -98,9 +98,6 @@ private:
     /// Size of the network
     int nb_server_;
 
-    /// Size of the network
-    int nb_request_;
-
     /// Rank of the leader
     rank leader_;
 
@@ -118,6 +115,9 @@ private:
 
     /// Crash status
     bool has_crashed_;
+
+    /// Whether the process should stop
+    bool stop_;
 
     /// number of vote in current election
     int nb_vote_;

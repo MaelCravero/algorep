@@ -42,6 +42,8 @@ std::optional<Repl::Command> Repl::parse_command(std::string line)
         command.order = Order::RECOVERY;
     else if (str == "STATUS")
         command.order = Order::PRINT;
+    else if (str == "STOP")
+        command.order = Order::STOP;
     else
         return {};
 
@@ -82,7 +84,10 @@ void Repl::execute(Command command)
 
     else
     {
-        if (command.order != Order::BEGIN)
+        if (command.order == Order::STOP)
+            for (int i = 1; i <= nb_server_ + nb_client_; i++)
+                mpi::send(i, message, MessageTag::REPL);
+        else if (command.order != Order::BEGIN)
             for (int i = 1; i <= nb_server_; i++)
                 mpi::send(i, message, MessageTag::REPL);
         else

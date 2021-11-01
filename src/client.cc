@@ -112,8 +112,11 @@ bool Client::recv_order()
     if (!tag)
         return false;
 
-    mpi::recv<rpc::Repl>();
+    auto recv_data = mpi::recv<rpc::Repl>();
 
-    started_ = true;
+    if (recv_data.order == Repl::Order::STOP)
+        done_ = true;
+    else if (recv_data.order == Repl::Order::BEGIN)
+        started_ = true;
     return true;
 }

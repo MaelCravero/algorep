@@ -71,6 +71,7 @@ namespace rpc
             BEGIN = 'b',
             RECOVERY = 'r',
             PRINT = 'p',
+            STOP = 'x',
         };
 
         Order order;
