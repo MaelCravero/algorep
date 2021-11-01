@@ -4,6 +4,7 @@
 #include <sstream>
 
 #include "mpi/mpi.hh"
+#include "utils/time.hh"
 
 Repl::Repl(int nb_server, int nb_client)
     : nb_server_(nb_server)
@@ -44,6 +45,8 @@ std::optional<Repl::Command> Repl::parse_command(std::string line)
         command.order = Order::PRINT;
     else if (str == "STOP")
         command.order = Order::STOP;
+    else if (str == "WAIT")
+        utils::sleep_for_ms(3000);
     else
         return {};
 
