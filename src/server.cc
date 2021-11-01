@@ -1,6 +1,7 @@
 #include "server.hh"
 
 #include <assert.h>
+#include <fstream>
 #include <iostream>
 #include <unistd.h>
 
@@ -76,25 +77,23 @@ bool Server::complete() const
     return true;
 }
 
-void Server::print_stats() const
+void Server::write_stats() const
 {
+    std::string filename = "stats_server" + std::to_string((int)rank_) + ".csv";
+    std::fstream file;
+    file.open(filename, std::ios::out);
+
     auto [sent, recv] = mpi_.get_stats();
 
-    std::cout << "Server: " << rank_ << " stats:\n";
+    file << "ACTION,TAG,NB_MESSAGES\n";
 
     for (int t = MessageTag::APPEND_ENTRIES; t < MessageTag::REPL; t++)
         if (sent.contains(t))
-            std::cout << "sent: " << sent.at(t) << " messages with tag "
-                      << tag_to_str(t) << "\n";
-
-    std::cout << "\n";
+            file << "SEND," << tag_to_str(t) << "," << sent.at(t) << "\n";
 
     for (int t = MessageTag::APPEND_ENTRIES; t < MessageTag::REPL; t++)
         if (recv.contains(t))
-            std::cout << "received: " << recv.at(t) << " messages with tag "
-                      << tag_to_str(t) << "\n";
-
-    std::cout << "\n";
+            file << "RECEIVE," << tag_to_str(t) << "," << recv.at(t) << "\n";
 }
 
 //------------------------------------------------------------------//
