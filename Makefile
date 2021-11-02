@@ -15,7 +15,7 @@ DEP = ${SRC:.cc=.d}
 
 BIN = algorep
 
-.PHONY: all run clean
+.PHONY: all run clean gen_commands
 
 NSERVER ?= 5
 NCLIENT ?= 5
@@ -25,7 +25,7 @@ NCMD ?= 5
 
 all: run
 
-run: $(BIN)
+run: $(BIN) gen_commands
 	mpirun -np $$(($(NSERVER) + $(NCLIENT) + 1)) -hostfile $(HOSTFILE) $(BIN) $(NSERVER) $(NCLIENT)
 
 $(BIN): $(OBJ)
