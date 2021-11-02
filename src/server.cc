@@ -557,8 +557,10 @@ void Server::handle_repl_request(int src)
         std::cout << " Crash: " << std::boolalpha << has_crashed_ << "\n";
         std::cout << "Leader: " << leader_ << "\n";
 
-        if (leader_ == rank_)
+        if (!has_crashed_ && leader_ == rank_)
         {
+            next_index_[rank_] = log_entries_.size();
+            commit_index_[rank_] = log_entries_.get_commit_index();
             std::cout << "NxtIdx: ";
             for (int i = 1; i <= nb_server_; i++)
                 std::cout << next_index_[i] << " ";
