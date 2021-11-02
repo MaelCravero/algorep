@@ -6,40 +6,8 @@
 
 namespace utils
 {
-    // template <std::size_t N>
-    // struct bounded_string : public std::array<char, N>
-    // {
-    //     using super_type = std::array<char, N>;
-
-    //     bounded_string() = default;
-
-    //     bounded_string(std::string s)
-    //         : super_type()
-    //     {
-    //         std::memcpy(this->data(), s.data(), N);
-    //         (*this)[N - 1] = 0;
-    //     }
-
-    //     bounded_string(const bounded_string& s)
-    //         : super_type()
-    //     {
-    //         std::memcpy(this->data(), s.data(), N);
-    //         (*this)[N - 1] = 0;
-    //     }
-
-    //     inline bounded_string& operator=(std::string s)
-    //     {
-    //         std::memcpy(this->data(), s.data(), N);
-    //         (*this)[N - 1] = 0;
-    //         return *this;
-    //     }
-
-    //     inline operator std::string()
-    //     {
-    //         return std::string(this->data());
-    //     }
-    // };
-
+    /// String with a known limit of characters in order to be passed by message
+    /// consistently.
     template <std::size_t N>
     class bounded_string
     {

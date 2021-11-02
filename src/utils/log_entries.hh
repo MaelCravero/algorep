@@ -26,7 +26,7 @@ namespace utils
         int get_commit_index() const;
         bool commit_next_entry();
         size_t size() const;
-        void delete_from_index(int index);
+        void delete_from_index(unsigned index);
 
         Entry& operator[](int i);
 

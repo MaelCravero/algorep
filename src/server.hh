@@ -72,8 +72,6 @@ private:
     void update_term();
     void update_term(int term);
     void append_entries(int term, rpc::ClientRequest data);
-    // ServerMessage init_message(int entry = 0);
-    // Send to all other servers
     void broadcast(const rpc::RequestVote& message, int tag);
     // Ignore messages if crashed
     void ignore_messages();

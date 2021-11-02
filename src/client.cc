@@ -44,7 +44,6 @@ Client::Client(int rank, int nb_server, std::string cmd_file)
 
 bool Client::done() const
 {
-    // return request_id_ > 0; // TODO implement command lists properly
     return done_;
 }
 
@@ -90,7 +89,6 @@ void Client::send_request()
 
             else
             {
-                // return true;
                 request_id_++;
                 if (request_id_ >= command_list_.size())
                     done_ = true;

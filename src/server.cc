@@ -342,7 +342,7 @@ void Server::start_election()
                                     log_entries_.last_log_term()};
 
     broadcast(message, MessageTag::REQUEST_VOTE);
-    nb_vote_ = 1; // Vote for himself
+    nb_vote_ = 1; // Vote for itself
 
     candidate();
 }
@@ -479,7 +479,6 @@ void Server::handle_append_entries(int src, int tag)
         return mpi_.send(leader_, message, MessageTag::APPEND_ENTRIES_RESPONSE);
     }
 
-    // last_log_index == prev_log_index
     if (log_entries_.last_log_index() > recv_data.prev_log_index
         && recv_data.term != log_entries_[recv_data.prev_log_index + 1].term)
     {
@@ -495,9 +494,6 @@ void Server::handle_append_entries(int src, int tag)
     update_commit_index(recv_data.leader_commit);
     update_term(recv_data.term);
 
-    // message = {rank_, recv_data.entry.has_value(),
-    //            log_entries_.last_log_index(),
-    //            log_entries_.get_commit_index()};
     message.value = recv_data.entry.has_value();
     message.log_index = log_entries_.last_log_index();
     message.commit_index = log_entries_.get_commit_index();

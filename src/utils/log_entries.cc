@@ -65,7 +65,7 @@ namespace utils
         return entries_.size();
     }
 
-    void LogEntries::delete_from_index(int index)
+    void LogEntries::delete_from_index(unsigned index)
     {
         if (index < entries_.size())
             entries_.resize(index);

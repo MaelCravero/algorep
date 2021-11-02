@@ -75,8 +75,6 @@ void Repl::execute(Command command)
 
     rpc::Repl message{command.order, command.speed_level};
 
-    // TODO: check if target is valid
-
     if (command.target)
     {
         if (command.order == Order::BEGIN && command.target <= nb_client_)
