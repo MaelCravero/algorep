@@ -61,7 +61,7 @@ void Client::send_request()
 
     int count_retry = 0;
 
-    while (count_retry < nb_server_ * 3)
+    while (!done_ && count_retry < nb_server_ * 3)
     {
         if (timeout)
         {
@@ -98,6 +98,7 @@ void Client::send_request()
                 return;
             }
         }
+        recv_order();
     }
 }
 
